@@ -821,11 +821,27 @@ input[type=text]{flex:1}
 .htab.on{background:var(--tx);color:#fff;border-color:var(--tx)}
 .hotel-main{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .hotel-map-wrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#eef0f3}
-#hotelMap{height:400px;width:100%}
-.hotel-mode{position:absolute;left:10px;top:10px;z-index:500;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:11.5px;color:var(--tx2);box-shadow:0 2px 8px rgba(20,30,50,.1);max-width:calc(100% - 20px)}
+#hotelMap{height:420px;width:100%}
+.hotel-mode{position:absolute;left:10px;top:10px;z-index:500;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:11.5px;color:var(--tx2);box-shadow:0 2px 8px rgba(20,30,50,.1);max-width:calc(100% - 20px);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hotel-mode b{color:var(--tx);font-weight:600}
+.hotel-back{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:14px;padding:2px 10px;font-size:11px;color:var(--tx2);transition:.15s}
+.hotel-back:hover{border-color:var(--blue);color:var(--blue)}
+.hotel-tiles-ctrl{position:absolute;right:10px;top:10px;z-index:500;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:11px;color:var(--tx2);box-shadow:0 2px 8px rgba(20,30,50,.1)}
+.hotel-tiles-ctrl label{cursor:pointer;margin-right:6px;display:inline-flex;align-items:center;gap:2px}
+.hotel-tiles-ctrl input{margin:0 2px 0 0;vertical-align:middle}
+.hotel-tiles-ctrl label:last-child{margin-right:0}
 .hotel-list{max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px}
 .hotel-card{display:block;text-decoration:none;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;transition:.15s}
 .hotel-card:hover{border-color:#c9d2e0;box-shadow:0 3px 12px rgba(20,30,50,.08);transform:translateY(-1px)}
+.hotel-actions{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line2);flex-wrap:wrap}
+.hotel-actions a{flex:1;min-width:120px;text-align:center;text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:11.5px;color:var(--tx);background:#fff;transition:.15s}
+.hotel-actions a:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-1px)}
+.hotel-actions a.trip{border-color:#e02b3c;color:#e02b3c}
+.hotel-actions a.trip:hover{background:#fef3f4;color:#c0111f;border-color:#c0111f}
+.hotel-actions a.booking{border-color:#003b95;color:#003b95}
+.hotel-actions a.booking:hover{background:#eaf0fd;color:#003b95}
+.hotel-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.hotel-list-head .ttl{font-weight:700;color:var(--tx);font-size:13px}
 .hc-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
 .hc-cat{font-size:10px;font-weight:700;color:#fff;padding:1px 8px;border-radius:10px}
 .hc-price{font-size:13px;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums}
@@ -1252,11 +1268,34 @@ renderPicks(); render();
 setTimeout(()=>map.invalidateSize(),300);
 
 /* ---------- 酒店推荐模块 ---------- */
+// 双瓦片源：默认高德（境内清晰）+ 标准英文（OSM/CartoDB 海外覆盖），用户可手动切换
+const HOTEL_TILES = {
+  gaode: { url:'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', sub:['1','2','3','4'], max:16, label:'高德地图', attr:'&copy; 高德地图' },
+  osm:   { url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                 sub:['a','b','c'],     max:19, label:'标准英文', attr:'&copy; OpenStreetMap' },
+};
+let hotelTileBase = 'gaode';
+function isIntlCity(lat,lng){ return lat<5 || lat>55 || lng<70 || lng>145; }
+function setHotelTiles(base){
+  if(!hotelMap) return;
+  if(window._hotelTileLayer){ hotelMap.removeLayer(window._hotelTileLayer); window._hotelTileLayer=null; }
+  hotelTileBase = base;
+  const opt = HOTEL_TILES[base];
+  window._hotelTileLayer = L.tileLayer(opt.url,{subdomains:opt.sub,maxZoom:opt.max,attribution:opt.attr}).addTo(hotelMap);
+  document.querySelectorAll('input[name="hotelTile"]').forEach(r=>{ r.checked = (r.value===base); });
+}
 function initHotel(){
   if(!HOTEL_DESTS.length || !document.getElementById('hotelMap')) return;
   hotelMap=L.map('hotelMap',{zoomControl:true,worldCopyJump:true,minZoom:2}).setView([20,108],3);
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:16,attribution:'&copy; 高德地图'}).addTo(hotelMap);
+  setHotelTiles('gaode');
   hotelLayer=L.layerGroup().addTo(hotelMap);
+  // 右上：瓦片源切换控件
+  const tileCtrl=document.createElement('div');
+  tileCtrl.className='hotel-tiles-ctrl';
+  tileCtrl.innerHTML = Object.entries(HOTEL_TILES).map(([k,o])=>'<label><input type="radio" name="hotelTile" value="'+k+'">'+o.label+'</label>').join('');
+  tileCtrl.addEventListener('change', e=>{ if(e.target.name==='hotelTile') setHotelTiles(e.target.value); });
+  // Leaflet 把 .leaflet-top/.leaflet-right 上的元素识别为控件
+  const wrap=document.createElement('div'); wrap.className='leaflet-top leaflet-right'; wrap.appendChild(tileCtrl);
+  document.getElementById('hotelMap').appendChild(wrap);
   document.querySelectorAll('.htab').forEach(t=>t.onclick=()=>{
     document.querySelectorAll('.htab').forEach(x=>x.classList.toggle('on',x===t));
     hotelCat=t.dataset.cat; renderHotelList();
@@ -1273,29 +1312,73 @@ function drawHotelGlobal(){
     m.on('click',()=>selectDest(d.code));
     hotelMarkers.push(m);
   });
-  const mode=document.getElementById('hotelMode'); if(mode) mode.textContent='🌍 全球酒店分布 · 点击地图标记或上方城市卡片查看当地酒店';
+  setHotelMode('🌍 全球酒店分布 · 点击地图标记或卡片查看当地酒店');
   renderHotelList();
+}
+// 在地图左上提示框里写文字 + 「↺ 返回全球视图」按钮
+function setHotelMode(html){
+  const mode=document.getElementById('hotelMode'); if(!mode) return;
+  mode.innerHTML = '<span>'+html+'</span>' + (hotelSel ? '<button class="hotel-back" id="hotelBackBtn">↺ 返回全球视图</button>' : '');
+  const back=document.getElementById('hotelBackBtn');
+  if(back) back.onclick = ()=>drawHotelGlobal();
+}
+// OTA 地图搜索 URL（带实际入住/退房日期）
+function tripHotelUrl(d, rk){
+  const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
+  const u = new URL('https://hk.trip.com/hotels/list');
+  u.searchParams.set('query', d.city);
+  u.searchParams.set('cityname', d.city);
+  if(dep) u.searchParams.set('checkIn', dep);
+  if(ret) u.searchParams.set('checkOut', ret);
+  u.searchParams.set('adult', '1');
+  u.searchParams.set('lang', 'zh-cn');
+  return u.toString();
+}
+function bookingMapUrl(d, rk){
+  const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
+  const u = new URL('https://www.booking.com/searchresults.html');
+  u.searchParams.set('ss', d.city);
+  if(dep) u.searchParams.set('checkin', dep);
+  if(ret) u.searchParams.set('checkout', ret);
+  u.searchParams.set('group_adults','1');
+  u.searchParams.set('no_rooms','1');
+  u.searchParams.set('map','1');
+  u.searchParams.set('lang','zh-cn');
+  u.searchParams.set('selected_currency','CNY');
+  return u.toString();
 }
 function selectDest(code){
   const d=HOTEL_DATA[code]; if(!d||!hotelMap) return;
   const rk=destBest[code];
   if(rk && code2key[code]){ select(code2key[code], false, true); }   // 联动机票 / 天气 / 粘性选择器
   hotelSel=code;
-  hotelMap.flyTo([d.lat,d.lng], d.lat>55?5:6, {duration:.7});
+  // 海外目的地自动切到 OSM 标准英文底图（避免高德海外空白）
+  if(isIntlCity(d.lat,d.lng) && hotelTileBase==='gaode') setHotelTiles('osm');
+  hotelMap.flyTo([d.lat,d.lng], 12, {duration:.8});
   hotelLayer.clearLayers(); hotelMarkers=[];
   const all=[...d.budget,...d.chain,...d.airbnb];
   const n=all.length;
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
+  // 8 瓣花布局 + 抖动 ≈ 550m 半径，酒店点位贴近城市坐标且不重叠
+  const slots = Math.min(n, 8);
   all.forEach((h,i)=>{
-    const ang=Math.PI*2*i/n, rad=0.07;
-    const la=d.lat+Math.cos(ang)*rad, ln=d.lng+Math.sin(ang)*rad;
+    const ang = (Math.PI*2*(i%slots))/slots;
+    const rad  = 0.006;
+    const jL = (((i*9301+49297)%233280)/233280 - 0.5) * 0.0006;
+    const jG = (((i*3673+12791)%198491)/198491 - 0.5) * 0.0006;
+    const la = d.lat + Math.cos(ang)*rad + jL;
+    const ln = d.lng + Math.sin(ang)*rad + jG;
     const col={budget:'#0f9960',chain:'#2563d9',airbnb:'#e02b3c'}[h.cat];
-    const m=L.circleMarker([la,ln],{radius:5.5,color:'#fff',weight:1.5,fillColor:col,fillOpacity:.85}).addTo(hotelLayer);
-    m.bindTooltip('<b>'+h.name+'</b><br><span style="color:#666">'+h.brand+(dep?' · 入住 '+dep+' · 退房 '+ret:'')+'</span>',{direction:'top'});
+    const m=L.circleMarker([la,ln],{radius:5.5,color:'#fff',weight:1.5,fillColor:col,fillOpacity:.9}).addTo(hotelLayer);
+    const priceTxt = h.priceMax ? ('¥'+h.price+'–'+h.priceMax+'/晚') : ('¥'+h.price+'/晚起');
+    m.bindTooltip('<b>'+h.name+'</b><br><span style="color:#666">'+h.brand+' · '+priceTxt+(dep?'<br>入住 '+dep+' · 退房 '+ret:'')+'</span>',{direction:'top'});
     m.on('click',()=>window.open(buildHotelUrl(h,rk),'_blank','noopener'));
     hotelMarkers.push(m);
   });
-  const mode=document.getElementById('hotelMode'); if(mode) mode.textContent='📍 '+d.city+' · 当地酒店（'+n+' 家）'+(rk?(' · 入住 '+dep+' · 退房 '+ret+'（机票推荐行程）'):'');
+  // 城市中心白色小点（永久标签）
+  const center=L.circleMarker([d.lat,d.lng],{radius:3,color:'#1b1f26',weight:1,fillColor:'#fff',fillOpacity:1}).addTo(hotelLayer);
+  center.bindTooltip('<b>📍 '+d.city+' 中心</b>',{permanent:true,direction:'right',offset:[6,0]});
+  setHotelMode('📍 <b>'+d.city+'</b> · 当地酒店 '+n+' 家'+(rk?(' · 入住 '+dep+' · 退房 '+ret+'（机票推荐行程）'):''));
   renderHotelList();
 }
 function renderHotelList(){
@@ -1310,16 +1393,25 @@ function renderHotelList(){
   const colMap={budget:'#0f9960',chain:'#2563d9',airbnb:'#e02b3c'};
   const rk=destBest[hotelSel];
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
-  list.innerHTML=items.map(h=>{
-    const price=h.priceMax?('¥'+h.price+'–'+h.priceMax+'/晚'):('¥'+h.price+'/晚起');
-    const catLabel=DATA.hotelCats.find(c=>c.key===h.cat).label;
-    const url=buildHotelUrl(h,rk);
-    return '<a class="hotel-card" href="'+url+'" target="_blank" rel="noopener">'+
-      '<div class="hc-top"><span class="hc-cat" style="background:'+colMap[h.cat]+'">'+catLabel+'</span><span class="hc-price">'+price+'</span></div>'+
-      '<div class="hc-name">'+h.name+'</div>'+
-      (dep?'<div class="hc-date" style="font-size:10.5px;color:var(--tx3);margin-top:2px">✈️ 机票推荐行程 '+dep+' → '+ret+'（共 '+tripDays(dep,ret)+' 晚）</div>':'')+
-      '<div class="hc-go">查看 / 预订 →</div></a>';
-  }).join('');
+  const trip = tripHotelUrl(d, rk), bmap = bookingMapUrl(d, rk);
+  list.innerHTML =
+    '<div class="hotel-list-head"><div class="ttl">📍 '+d.city+'</div><button class="hotel-back" id="hotelListBackBtn">↺ 返回全球</button></div>'+
+    '<div class="hotel-actions" style="margin-bottom:8px;padding-top:0;border:0">'+
+      '<a class="trip"    href="'+trip+'"  target="_blank" rel="noopener">🗺 在携程国际站地图查看 →</a>'+
+      '<a class="booking" href="'+bmap+'"  target="_blank" rel="noopener">🗺 在 Booking 地图查看 →</a>'+
+    '</div>'+
+    items.map(h=>{
+      const price=h.priceMax?('¥'+h.price+'–'+h.priceMax+'/晚'):('¥'+h.price+'/晚起');
+      const catLabel=DATA.hotelCats.find(c=>c.key===h.cat).label;
+      const url=buildHotelUrl(h,rk);
+      return '<a class="hotel-card" href="'+url+'" target="_blank" rel="noopener">'+
+        '<div class="hc-top"><span class="hc-cat" style="background:'+colMap[h.cat]+'">'+catLabel+'</span><span class="hc-price">'+price+'</span></div>'+
+        '<div class="hc-name">'+h.name+'</div>'+
+        (dep?'<div class="hc-date" style="font-size:10.5px;color:var(--tx3);margin-top:2px">✈️ 机票推荐行程 '+dep+' → '+ret+'（共 '+tripDays(dep,ret)+' 晚）</div>':'')+
+        '<div class="hc-go">查看 / 预订 →</div></a>';
+    }).join('');
+  const back=document.getElementById('hotelListBackBtn');
+  if(back) back.onclick = ()=>drawHotelGlobal();
 }
 function syncHotels(code){
   if(!hotelMap) return;            // 初始化前跳过
