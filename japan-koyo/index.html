@@ -822,6 +822,8 @@ input[type=text]{flex:1}
 .htab:hover{border-color:#c9d2e0}
 .htab.on{background:var(--tx);color:#fff;border-color:var(--tx)}
 .hotel-main{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.hotel-main.embed{grid-template-columns:1fr}   /* 切到携程/Booking/OSM 嵌入时独享整宽（嵌入页自含酒店列表） */
+.hotel-main.embed .hotel-list{display:none}
 .hotel-map-wrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#eef0f3}
 /* 4 视图 tab：Leaflet / OSM / 携程 / Booking */
 .hotel-views{display:flex;gap:6px;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:#f7f9fc}
@@ -829,7 +831,7 @@ input[type=text]{flex:1}
 .hvtab.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 .hvtab:hover{border-color:var(--blue);color:var(--blue)}
 .hvtab.on:hover{color:#fff}
-.hotel-view-stage{position:relative;width:100%;height:420px}
+.hotel-view-stage{position:relative;width:100%;height:580px}
 #hotelMap, #hotelOsm, #hotelTrip, #hotelBooking{position:absolute;inset:0;width:100%;height:100%;border:0}
 #hotelMap{background:#eef0f3}
 .hotel-iframe-wrap{position:absolute;inset:0;background:#fff}
@@ -837,7 +839,7 @@ input[type=text]{flex:1}
 .hotel-iframe-fail{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:#fff;padding:20px;text-align:center}
 .hotel-iframe-fail.show{display:flex}
 .hotel-iframe-fail a{color:var(--blue);text-decoration:none;border-bottom:1px dashed var(--blue)}
-#hotelMap{height:420px;width:100%}
+#hotelMap{height:580px;width:100%}
 .hotel-mode{position:absolute;left:8px;top:8px;z-index:500;background:rgba(255,255,255,.88);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:10.5px;color:var(--tx2);box-shadow:0 1px 4px rgba(20,30,50,.08);max-width:200px;line-height:1.35;pointer-events:none}
 .hotel-mode b{color:var(--tx);font-weight:600}
 .hotel-back{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:14px;padding:2px 10px;font-size:11px;color:var(--tx2);transition:.15s}
@@ -884,7 +886,7 @@ input[type=text]{flex:1}
 .hg-card:hover{border-color:#c9d2e0;box-shadow:0 3px 12px rgba(20,30,50,.08)}
 .hg-card b{font-size:13px}
 .hg-card span{display:block;font-size:10.5px;color:var(--tx3);margin-top:2px}
-@media(max-width:780px){ .hotel-main{grid-template-columns:1fr} #hotelMap{height:300px} .hotel-list{max-height:320px} }
+@media(max-width:780px){ .hotel-main{grid-template-columns:1fr} #hotelMap{height:440px} .hotel-view-stage{height:440px} .hotel-list{max-height:320px} }
 .koyo-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:8px}
 .koyo-legend div{display:flex;align-items:center;gap:5px}
 #kMap{height:400px;border-radius:10px;border:1px solid var(--line);margin-top:10px;background:#eaf3fb}
@@ -1513,16 +1515,17 @@ function setHotelMode(html){
   const back=document.getElementById('hotelBackBtn');
   if(back) back.onclick = ()=>drawHotelGlobal();
 }
-// OTA 地图搜索 URL（带实际入住/退房日期）
-function tripHotelUrl(d, rk){
+// 携程「酒店地图找房」URL（hotels.ctrip.com 专用地图找房页，d-country/d-name 即可；d-city 编号会因城市而异，省略后携程按 d-name 自动匹配）
+function tripMapUrl(d, rk){
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
-  const u = new URL('https://hk.trip.com/hotels/list');
-  u.searchParams.set('query', d.city);
-  u.searchParams.set('cityname', d.city);
-  if(dep) u.searchParams.set('checkIn', dep);
-  if(ret) u.searchParams.set('checkOut', ret);
+  const u = new URL('https://hotels.ctrip.com/hotels/hotelmap/map');
+  u.searchParams.set('d-country', '1');
+  u.searchParams.set('d-name', d.city);
+  if(dep) u.searchParams.set('checkin', dep);
+  if(ret) u.searchParams.set('checkout', ret);
   u.searchParams.set('adult', '1');
-  u.searchParams.set('lang', 'zh-cn');
+  u.searchParams.set('cruise', '0');
+  u.searchParams.set('mproom', '0');
   return u.toString();
 }
 function bookingMapUrl(d, rk){
@@ -1533,6 +1536,7 @@ function bookingMapUrl(d, rk){
   if(ret) u.searchParams.set('checkout', ret);
   u.searchParams.set('group_adults','1');
   u.searchParams.set('no_rooms','1');
+  u.searchParams.set('group_children','0');
   u.searchParams.set('map','1');
   u.searchParams.set('lang','zh-cn');
   u.searchParams.set('selected_currency','CNY');
@@ -1562,6 +1566,9 @@ function setHotelView(v){
     if(k==='leaflet'){ wrap.style.display = (v==='leaflet') ? '' : 'none'; if(v==='leaflet' && hotelMap) setTimeout(()=>hotelMap.invalidateSize(),50); }
     else{ wrap.style.display = (v===k) ? '' : 'none'; }
   });
+  // 切到嵌入视图时让酒店地图区域独享整宽（嵌入页自含酒店列表）
+  const main = document.querySelector('.hotel-main');
+  if(main) main.classList.toggle('embed', v!=='leaflet');
   // 同步更新当前 hotelSel 下的 iframe
   if(hotelSel){
     const d=HOTEL_DATA[hotelSel]; if(d) refreshHotelIframes(d, destBest[hotelSel]);
@@ -1574,7 +1581,7 @@ function refreshHotelIframes(d, rk){
   const osmI=document.getElementById('hotelOsm');
   if(osmI){ osmI.onload=()=>hideFail('hotelOsmFail'); osmI.onerror=()=>showFail('hotelOsmFail'); osmI.src=osmUrl; }
   const osmOpenA=document.getElementById('hotelOsmOpen'); if(osmOpenA) osmOpenA.href=osmOpen;
-  const tripUrl=tripHotelUrl(d,rk);
+  const tripUrl=tripMapUrl(d,rk);
   const tripI=document.getElementById('hotelTrip');
   if(tripI){ tripI.onload=()=>hideFail('hotelTripFail'); tripI.onerror=()=>showFail('hotelTripFail'); tripI.src=tripUrl; }
   const tripOpenA=document.getElementById('hotelTripOpen'); if(tripOpenA) tripOpenA.href=tripUrl;
@@ -1692,11 +1699,11 @@ function renderHotelList(){
   const colMap={budget:'#0f9960',chain:'#2563d9',airbnb:'#e02b3c'};
   const rk=destBest[hotelSel];
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
-  const trip = tripHotelUrl(d, rk), bmap = bookingMapUrl(d, rk);
+  const trip = tripMapUrl(d, rk), bmap = bookingMapUrl(d, rk);
   list.innerHTML =
     '<div class="hotel-list-head"><div class="ttl">📍 '+d.city+'</div><button class="hotel-back" id="hotelListBackBtn">↺ 返回全球</button></div>'+
     '<div class="hotel-actions" style="margin-bottom:8px;padding-top:0;border:0">'+
-      '<a class="trip"    href="'+trip+'"  target="_blank" rel="noopener">🗺 在携程国际站地图查看 →</a>'+
+      '<a class="trip"    href="'+trip+'"  target="_blank" rel="noopener">🗺 携程酒店地图找房 →</a>'+
       '<a class="booking" href="'+bmap+'"  target="_blank" rel="noopener">🗺 在 Booking 地图查看 →</a>'+
     '</div>'+
     items.map(h=>{
