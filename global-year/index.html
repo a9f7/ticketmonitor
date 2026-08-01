@@ -1059,8 +1059,12 @@ function initSticky(){
     const k=sel.value;
     if(k && byKey[k]){
       const r=byKey[k];
-      select(r.key, false);                     // ← fromMap=false：不触发 scrollIntoView，留在原地
-      map.flyTo([r.lat,r.lng], 4, {duration:.7});
+      // 按当前 state.origins 重选一条同目的地的最佳 route；找不到则用 sel 选中的那条（会显示「该出发地暂无该目的地数据」）
+      const scoped = findBestRoute(r.code, state.origins);
+      const finalR = scoped || r;
+      state.sel = finalR.key;
+      select(finalR.key, false);                     // ← fromMap=false：不触发 scrollIntoView，留在原地
+      map.flyTo([finalR.lat, finalR.lng], 4, {duration:.7});
     }
     sel.value='';
   };
@@ -1105,26 +1109,54 @@ function initSticky(){
       const isMatch=(state.origins.size===1 && state.origins.has(o));
       c.classList.toggle('on', isGbaAll || isMatch);
     });
+    // 按当前目的地 + 新出发地集合 找一条最佳 route
+    const curDest = state.sel ? (byKey[state.sel] && byKey[state.sel].code) : null;
+    const newR = curDest ? findBestRoute(curDest, state.origins) : null;
+    if(newR){ state.sel = newR.key; }
+    // 找不到时保留原 state.sel，syncSticky 内部会显示「该出发地暂无该目的地数据」
     render();
-    syncSticky(byKey[state.sel]);
+    syncSticky(newR || byKey[state.sel] || null);
+    if(newR) map.flyTo([newR.lat, newR.lng], 4, {duration:.7});
   };
+  // 默认：oSel 显式设值「大湾区（5 城）」，并按默认大湾区状态选一条最便宜的 route 作为初始 state.sel
+  oSel.value='__GBA__';
+  if(!state.sel){
+    let cheapest=null;
+    DATA.routes.forEach(r=>{
+      if(!state.origins.has(r.originCode)) return;
+      if(!cheapest || r.minPrice<cheapest.minPrice) cheapest=r;
+    });
+    if(cheapest){ state.sel=cheapest.key; }
+  }
+  syncSticky(state.sel ? byKey[state.sel] : null);
+}
+// 在 state.origins 集合下找 (destCode) 的最低价 route；找不到返回 null
+function findBestRoute(destCode, originSet){
+  let best=null;
+  DATA.routes.forEach(r=>{
+    if(r.code!==destCode) return;
+    if(!originSet.has(r.originCode)) return;
+    if(!best || r.minPrice<best.minPrice) best=r;
+  });
+  return best;
 }
 function syncSticky(r){
   const cur=document.getElementById('ssCurrent'); if(!cur) return;
   const meta=document.getElementById('ssMeta'); if(!meta) return;
-  const oSel=document.getElementById('ssOriginSelect');
-  if(!r){ cur.className='ss-current empty'; cur.textContent='未选择目的地 · 从上方卡片/列表/酒店地图点选'; meta.innerHTML=''; if(oSel) oSel.value=''; return; }
+  if(!r){ cur.className='ss-current empty'; cur.textContent='未选择目的地 · 从上方卡片/列表/酒店地图点选'; meta.innerHTML=''; return; }
   const o=r.options[0];
   cur.className='ss-current';
   cur.innerHTML=r.city+'<span class="code">'+r.code+'</span>';
-  // 同步出发地选择器为当前 state.origins
-  if(oSel){
-    const isGbaAll = state.origins.size===DATA.gbaCodes.length && DATA.gbaCodes.every(c=>state.origins.has(c));
-    if(isGbaAll) oSel.value='__GBA__';
-    else if(state.origins.size===1) oSel.value=[...state.origins][0];
-    else oSel.value='';
-  }
+  // 检测当前 r 的 originCode 是否还在 state.origins 里；不在则视为「该出发地暂无该目的地数据」
+  const inScope = state.origins.size===0 || state.origins.has(r.originCode);
   const w=r.weather;
+  if(!inScope){
+    const originNames = r.originCity + ' (' + r.originCode + ')';
+    meta.innerHTML =
+      '<span class="ss-pill" style="background:#fff5e0;border-color:#f3ddb8;color:#8a5b12">⚠ 当前出发地（'+originNames+'）暂无该目的地数据，可换其他出发地查看</span>'+
+      '<span class="ss-pill" style="color:#8b93a1">¥'+r.minPrice+' <i style="font-style:normal;opacity:.75">/'+TIER_LABEL[r.tier]+'</i> · '+r.originCity+'出发（参考）</span>';
+    return;
+  }
   const wPill=w?('<span class="ss-pill" style="background:'+W[w.grade].bg+';border-color:'+W[w.grade].color+'40;color:'+W[w.grade].color+'">☁ '+W[w.grade].label+' · 雨'+w.prcp+'mm</span>'):'';
   const days=tripDays(o.depDate,o.retDate);
   meta.innerHTML=
