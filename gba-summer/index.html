@@ -1039,7 +1039,7 @@ input[type=text]{flex:1}
         <div class="hotel-views" id="hotelViews">
           <div class="hvtab on" data-view="leaflet">🗺 自做标点</div>
           <div class="hvtab" data-view="osm">🌐 OSM 实图（嵌入）</div>
-          <div class="hvtab" data-view="trip">🗺 携程（国内站 嵌入）</div>
+          <div class="hvtab" data-view="trip">🗺 携程（国内站 · 列表）</div>
           <div class="hvtab" data-view="booking">🗺 Booking（嵌入）</div>
         </div>
         <div class="hotel-view-stage" id="hotelStage">
@@ -1055,9 +1055,9 @@ input[type=text]{flex:1}
           <div class="hotel-iframe-wrap" id="hotelTripWrap" style="display:none">
             <iframe id="hotelTrip" title="Trip.com" loading="lazy"></iframe>
             <div class="hotel-iframe-fail" id="hotelTripFail">
-              <div style="font-size:13px;font-weight:600">⚠️ 携程酒店地图找房加载失败</div>
+              <div style="font-size:13px;font-weight:600">⚠️ 携程酒店列表加载失败</div>
               <div style="font-size:11px;color:var(--tx3)">（X-Frame-Options 或异地会话异常。可点下方按钮在新窗口查看）</div>
-              <a id="hotelTripOpen" href="#" target="_blank" rel="noopener">↗ 在新窗口打开携程酒店地图</a>
+              <a id="hotelTripOpen" href="#" target="_blank" rel="noopener">↗ 在新窗口打开携程酒店列表</a>
             </div>
           </div>
           <div class="hotel-iframe-wrap" id="hotelBookingWrap" style="display:none">
@@ -1492,23 +1492,22 @@ function setHotelMode(html){
   const back=document.getElementById('hotelBackBtn');
   if(back) back.onclick = ()=>drawHotelGlobal();
 }
-// 携程「酒店地图找房」URL —— 携程 SPA 必须有 d-city 数字 ID 才能定位城市，d-name 仅作显示
-// - 表内城市用 d-country + d-city + d-name 三参（保证正确显示）
-// - 表外城市兜底：用 hotels.ctrip.com/hotels/ 酒店搜索页（按 d-name 模糊搜索）+ 携带日期
+// 携程酒店搜索 URL —— 携程 SPA 必须有 city 数字 ID 才能定位城市并预填目的地
+// - 表内城市用 /hotels/list?city=X&checkin=... 走「酒店列表 + 顶部搜索框预填」入口（实测 value="上海"/"东京" 已预填）
+// - 页面右上角有「查看地图」按钮可切到地图视图；直接用 /hotels/hotelmap/map 时 d-name 不写入搜索框（destination 为空）
+// - 表外城市兜底：用 hotels.ctrip.com/hotels/?query=城市名 + 携带日期
 function tripMapUrl(d, rk){
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
   const m = CITY_TRIP_ID[d.code];
   if(m){
-    const u = new URL('https://hotels.ctrip.com/hotels/hotelmap/map');
-    u.searchParams.set('d-country', String(m.country));
-    u.searchParams.set('d-city', String(m.city));
-    u.searchParams.set('d-name', m.name || d.city);
+    const u = new URL('https://hotels.ctrip.com/hotels/list');
+    u.searchParams.set('city', String(m.city));
     if(dep) u.searchParams.set('checkin', dep);
     if(ret) u.searchParams.set('checkout', ret);
     u.searchParams.set('adult', '1');
     return u.toString();
   }
-  // 兜底：酒店搜索页（按 d-name 模糊搜索，可正确显示任意城市）
+  // 兜底：酒店搜索页（按 query 模糊搜索）
   const u = new URL('https://hotels.ctrip.com/hotels/');
   u.searchParams.set('query', d.city);
   if(dep) u.searchParams.set('checkin', dep);
@@ -1708,7 +1707,7 @@ function renderHotelList(){
   list.innerHTML =
     '<div class="hotel-list-head"><div class="ttl">📍 '+d.city+'</div><button class="hotel-back" id="hotelListBackBtn">↺ 返回全球</button></div>'+
     '<div class="hotel-actions" style="margin-bottom:8px;padding-top:0;border:0">'+
-      '<a class="trip"    href="'+trip+'"  target="_blank" rel="noopener">🗺 携程酒店地图找房 →</a>'+
+      '<a class="trip"    href="'+trip+'"  target="_blank" rel="noopener">🗺 携程酒店列表 →</a>'+
       '<a class="booking" href="'+bmap+'"  target="_blank" rel="noopener">🗺 在 Booking 地图查看 →</a>'+
     '</div>'+
     items.map(h=>{
