@@ -756,6 +756,8 @@ input[type=text]{flex:1}
 .sticky-selector .ss-current.empty{background:#f5f6f8;border-color:var(--line);color:var(--tx3);font-weight:500;font-size:12.5px}
 .sticky-selector select#ssSelect{flex:1;min-width:200px;max-width:340px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fff;color:var(--tx);font-family:inherit;cursor:pointer;outline:none}
 .sticky-selector select#ssSelect:focus{border-color:var(--blue)}
+.sticky-selector select#ssOriginSelect{flex:0 0 auto;min-width:138px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fff;color:var(--tx);font-family:inherit;cursor:pointer;outline:none}
+.sticky-selector select#ssOriginSelect:focus{border-color:var(--blue)}
 .sticky-selector .ss-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--tx2)}
 .sticky-selector .ss-meta .ss-pill{background:#f5f6f8;border:1px solid var(--line);border-radius:14px;padding:2px 9px;white-space:nowrap}
 .sticky-selector .ss-meta .ss-pill b{color:var(--tx);font-weight:600}
@@ -920,6 +922,9 @@ input[type=text]{flex:1}
     <select id="ssSelect" aria-label="切换目的地">
       <option value="">— 切换目的地 —</option>
     </select>
+    <select id="ssOriginSelect" aria-label="切换出发地" class="ss-origin-sel">
+      <option value="">— 切换出发地 —</option>
+    </select>
     <div class="ss-meta" id="ssMeta"></div>
   </div>
 
@@ -1059,18 +1064,70 @@ function initSticky(){
     }
     sel.value='';
   };
+
+  // 出发地选择器（10 城：大湾区 5 + 新增 5）
+  const oSel=document.getElementById('ssOriginSelect'); if(!oSel) return;
+  // a. 大湾区 5 城汇总项
+  const gbaOpt=document.createElement('option');
+  gbaOpt.value='__GBA__';
+  gbaOpt.textContent='✈ 大湾区（5 城）';
+  oSel.appendChild(gbaOpt);
+  // b. 大湾区 5 城分别列出
+  DATA.origins.filter(o=>DATA.gbaCodes.includes(o.code)).forEach(o=>{
+    const opt=document.createElement('option');
+    opt.value=o.code;
+    opt.textContent='  '+o.city+' ('+o.code+')';
+    oSel.appendChild(opt);
+  });
+  // c. 分隔线 + 新增 5 城
+  const sepOpt=document.createElement('option');
+  sepOpt.disabled=true;
+  sepOpt.textContent='── 其他城市 ──';
+  oSel.appendChild(sepOpt);
+  DATA.origins.filter(o=>!DATA.gbaCodes.includes(o.code)).forEach(o=>{
+    const opt=document.createElement('option');
+    opt.value=o.code;
+    opt.textContent='  '+o.city+' ('+o.code+')';
+    oSel.appendChild(opt);
+  });
+  oSel.onchange=()=>{
+    const v=oSel.value;
+    if(!v) return;
+    if(v==='__GBA__'){
+      state.origins=new Set(DATA.gbaCodes);
+    } else {
+      state.origins=new Set([v]);
+    }
+    // 同步更新顶部 chip 选择器高亮
+    document.querySelectorAll('#origins .chip').forEach(c=>{
+      const o=c.dataset.o;
+      const isGbaAll=(v==='__GBA__') && DATA.gbaCodes.includes(o);
+      const isMatch=(state.origins.size===1 && state.origins.has(o));
+      c.classList.toggle('on', isGbaAll || isMatch);
+    });
+    render();
+    syncSticky(byKey[state.sel]);
+  };
 }
 function syncSticky(r){
   const cur=document.getElementById('ssCurrent'); if(!cur) return;
   const meta=document.getElementById('ssMeta'); if(!meta) return;
-  if(!r){ cur.className='ss-current empty'; cur.textContent='未选择目的地 · 从上方卡片/列表/酒店地图点选'; meta.innerHTML=''; return; }
+  const oSel=document.getElementById('ssOriginSelect');
+  if(!r){ cur.className='ss-current empty'; cur.textContent='未选择目的地 · 从上方卡片/列表/酒店地图点选'; meta.innerHTML=''; if(oSel) oSel.value=''; return; }
   const o=r.options[0];
   cur.className='ss-current';
   cur.innerHTML=r.city+'<span class="code">'+r.code+'</span>';
+  // 同步出发地选择器为当前 state.origins
+  if(oSel){
+    const isGbaAll = state.origins.size===DATA.gbaCodes.length && DATA.gbaCodes.every(c=>state.origins.has(c));
+    if(isGbaAll) oSel.value='__GBA__';
+    else if(state.origins.size===1) oSel.value=[...state.origins][0];
+    else oSel.value='';
+  }
   const w=r.weather;
   const wPill=w?('<span class="ss-pill" style="background:'+W[w.grade].bg+';border-color:'+W[w.grade].color+'40;color:'+W[w.grade].color+'">☁ '+W[w.grade].label+' · 雨'+w.prcp+'mm</span>'):'';
   const days=tripDays(o.depDate,o.retDate);
-  meta.innerHTML='<span class="ss-pill">'+r.originCity+'出发</span>'+
+  meta.innerHTML=
     '<span class="ss-pill">行程 <b>'+o.depDate.slice(5)+' → '+o.retDate.slice(5)+'</b> · '+days+' 天</span>'+
     '<span class="ss-pill p">¥'+r.minPrice+' <i style="font-style:normal;opacity:.75">/'+TIER_LABEL[r.tier]+'</i></span>'+
     wPill;
