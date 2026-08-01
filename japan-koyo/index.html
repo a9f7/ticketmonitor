@@ -860,18 +860,6 @@ input[type=text]{flex:1}
     </nav>
   </header>
 
-  
-  <div class="exclude-bar" id="excludeBar">
-    <div class="ex-icon">🍁</div>
-    <div style="flex:1;min-width:0">
-      <div><b>已按各目的地红叶期定向搜索</b>：先按当地物候推算「初红 → 半红 → 满红」的日期，<b>只在该区间内</b>搜索低价航班——绿叶期与落叶期的目的地及日期均不纳入结果。</div>
-      <div class="ex-hint">共 <b>14</b> 个目的地命中红叶期航班，剔除 <b>20</b> 个：</div>
-      <div class="ex-grp"><span class="ex-rsn" style="background:#8f9296">无低价航班</span><span class="ex-rsn-d">红叶期内未搜到符合条件的低价航班</span>
-        <div class="ex-tags"><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>成田(东京) NRT<i>红叶期 11-10~12-03</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>大分 OIT<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>德岛 TCY<i>红叶期 11-05~11-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>富山 TOY<i>红叶期 11-01~11-24</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>宫古岛 MMY<i>红叶期 12-03~12-18</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>宫崎 KMI<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>关西(大阪) KIX<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>函馆 HKD<i>红叶期 10-06~10-28</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>花卷(盛冈) HNA<i>红叶期 10-20~11-12</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>金泽(小松) KMQ<i>红叶期 11-05~11-28</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>静冈 FSZ<i>红叶期 11-06~11-29</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>米子(鸟取) YGJ<i>红叶期 11-05~11-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>秋田 AXT<i>红叶期 10-20~11-12</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>神户 UKB<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>石垣岛 ISG<i>红叶期 12-03~12-18</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>松山 MYJ<i>红叶期 11-05~11-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>新潟 KIJ<i>红叶期 11-05~11-28</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>旭川 AKJ<i>红叶期 10-03~10-25</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>札幌 CTS<i>红叶期 10-05~10-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>长崎 NGS<i>红叶期 11-10~12-02</i></span></div></div>
-    </div>
-    <div class="ex-close" id="excludeClose" title="收起">×</div>
-  </div>
-
   <div class="picks" id="picks"></div>
 
   <div class="main">
@@ -945,7 +933,7 @@ input[type=text]{flex:1}
     </div>
     <div class="koyo-legend">
       <div><span class="dot" style="background:#2f9e44"></span> 绿叶 · 尚未变色，满山翠绿</div><div><span class="dot" style="background:#a9c94a"></span> 初红 · 开始泛红，零星点缀</div><div><span class="dot" style="background:#e8920c"></span> 半红 · 红黄交杂，渐入佳境</div><div><span class="dot" style="background:#d8392b"></span> 满红 · 漫山红遍，最佳观赏期</div><div><span class="dot" style="background:#9c6b3f"></span> 落叶 · 叶片飘落，观赏尾声</div>
-      <div style="color:#9c6b3f"><span class="dot" style="background:#9c6b3f"></span> 另有 <b>20 个</b>目的地已剔除（详见顶部提示条）</div>
+      <div style="color:#9c6b3f"><span class="dot" style="background:#9c6b3f"></span> 另有 <b>20 个</b>目的地已剔除（详见底部提示条）</div>
     </div>
     <div class="kmap-wrap">
       <div id="kMap"></div>
@@ -967,6 +955,18 @@ input[type=text]{flex:1}
     <br>天气：Open-Meteo 逐日数值预报与近 5 年同期 ERA5 气候常态推算，累计降雨量为出行窗口内每日降水之和。
     <br>枫叶：基于日本九大地方典型物候时间表（参照加拿大枫叶颜色时间表实现方式）建模，给出各地绿叶/初红/半红/满红/落叶阶段与最佳观赏窗口，实际变色受当年气候影响，仅供参考。
   </div>
+</div>
+
+
+<div class="exclude-bar" id="excludeBar" style="margin:16px auto 0;max-width:1200px">
+  <div class="ex-icon">🍁</div>
+  <div style="flex:1;min-width:0">
+    <div><b>已按各目的地红叶期定向搜索</b>：先按当地物候推算「初红 → 半红 → 满红」的日期，<b>只在该区间内</b>搜索低价航班——绿叶期与落叶期的目的地及日期均不纳入结果。</div>
+    <div class="ex-hint">共 <b>14</b> 个目的地命中红叶期航班，剔除 <b>20</b> 个：</div>
+    <div class="ex-grp"><span class="ex-rsn" style="background:#8f9296">无低价航班</span><span class="ex-rsn-d">红叶期内未搜到符合条件的低价航班</span>
+      <div class="ex-tags"><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>成田(东京) NRT<i>红叶期 11-10~12-03</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>大分 OIT<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>德岛 TCY<i>红叶期 11-05~11-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>富山 TOY<i>红叶期 11-01~11-24</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>宫古岛 MMY<i>红叶期 12-03~12-18</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>宫崎 KMI<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>关西(大阪) KIX<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>函馆 HKD<i>红叶期 10-06~10-28</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>花卷(盛冈) HNA<i>红叶期 10-20~11-12</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>金泽(小松) KMQ<i>红叶期 11-05~11-28</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>静冈 FSZ<i>红叶期 11-06~11-29</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>米子(鸟取) YGJ<i>红叶期 11-05~11-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>秋田 AXT<i>红叶期 10-20~11-12</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>神户 UKB<i>红叶期 11-10~12-02</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>石垣岛 ISG<i>红叶期 12-03~12-18</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>松山 MYJ<i>红叶期 11-05~11-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>新潟 KIJ<i>红叶期 11-05~11-28</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>旭川 AKJ<i>红叶期 10-03~10-25</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>札幌 CTS<i>红叶期 10-05~10-27</i></span><span class="ex-tag"><span class="dot" style="background:#8f9296"></span>长崎 NGS<i>红叶期 11-10~12-02</i></span></div></div>
+  </div>
+  <div class="ex-close" id="excludeClose" title="收起">×</div>
 </div>
 
 <script>/* @preserve
