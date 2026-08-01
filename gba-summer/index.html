@@ -1111,16 +1111,22 @@ const byKey={}; DATA.routes.forEach(r=>byKey[r.key]=r);
 const code2key={}; DATA.routes.forEach(r=>{ if(!code2key[r.code]) code2key[r.code]=r.key; });
 
 /* ---------- 粘性城市选择器（顶部下拉时一直可见） ---------- */
-function initSticky(){
+// 重建目的地下拉菜单：按当前 state.origins 过滤，只列出该出发地集合内的航线
+function populateDestDropdown(){
   const sel=document.getElementById('ssSelect'); if(!sel) return;
+  sel.innerHTML = '<option value="">— 切换目的地 —</option>';
   const sorted=DATA.routes.slice().sort((a,b)=>a.minPrice-b.minPrice);
   sorted.forEach(r=>{
+    if(state.origins.size && !state.origins.has(r.originCode)) return;  // 按当前出发地过滤
     const o=r.options[0];
     const opt=document.createElement('option');
     opt.value=r.key;
     opt.textContent=r.city+' ('+r.code+') · ¥'+r.minPrice+' · '+r.originCity+'出发 · '+o.depDate.slice(5)+'→'+o.retDate.slice(5);
     sel.appendChild(opt);
   });
+}
+function initSticky(){
+  const sel=document.getElementById('ssSelect'); if(!sel) return;
   sel.onchange=()=>{
     const k=sel.value;
     if(k && byKey[k]){
@@ -1180,6 +1186,7 @@ function initSticky(){
     const newR = curDest ? findBestRoute(curDest, state.origins) : null;
     if(newR){ state.sel = newR.key; }
     // 找不到时保留原 state.sel，syncSticky 内部会显示「该出发地暂无该目的地数据」
+    populateDestDropdown();   // 切完出发地，刷新目的地下拉，只显示该出发地的航线
     render();
     syncSticky(newR || byKey[state.sel] || null);
     if(newR) map.flyTo([newR.lat, newR.lng], 4, {duration:.7});
@@ -1194,6 +1201,7 @@ function initSticky(){
     });
     if(cheapest){ state.sel=cheapest.key; }
   }
+  populateDestDropdown();   // 初始化目的地下拉，按默认 state.origins (大湾区 5 城) 过滤
   syncSticky(state.sel ? byKey[state.sel] : null);
 }
 // 在 state.origins 集合下找 (destCode) 的最低价 route；找不到返回 null
