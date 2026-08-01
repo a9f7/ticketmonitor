@@ -849,6 +849,22 @@ input[type=text]{flex:1}
 .hc-price{font-size:13px;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums}
 .hc-name{font-size:13px;font-weight:600}
 .hc-go{font-size:11px;color:var(--blue);margin-top:3px}
+.hc-go a{color:var(--blue);text-decoration:none}
+.hc-go a:hover{text-decoration:underline}
+.hc-go::after{content:'点击卡片定位地图 · 链接跳转携程 →';color:var(--tx3);font-size:10.5px;display:block;margin-top:1px}
+.hotel-card{cursor:pointer}
+.hotel-card.is-sel{border-color:#ff7a00;box-shadow:0 0 0 2px rgba(255,122,0,.18)}
+/* 酒店价格气泡 marker（divIcon） */
+.hm-icon{background:transparent!important;border:0!important}
+.hm-wrap{position:relative;width:0;height:0}
+.hm-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;background:#fff;border:2px solid var(--blue);border-radius:50%;box-shadow:0 1px 3px rgba(20,30,50,.35)}
+.hm-bubble{position:absolute;left:0;top:-30px;transform:translateX(-50%);background:#fff;border:1.5px solid var(--line);border-radius:7px;padding:2px 7px;font-size:11.5px;font-weight:700;color:var(--tx);white-space:nowrap;box-shadow:0 2px 6px rgba(20,30,50,.18);cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;user-select:none;pointer-events:auto}
+.hm-bubble:hover{transform:translateX(-50%) scale(1.12);z-index:1000}
+.hm-bubble.budget{border-color:#0f9960;color:#0f9960}
+.hm-bubble.chain{border-color:#2563d9;color:#2563d9}
+.hm-bubble.airbnb{border-color:#e02b3c;color:#e02b3c}
+.hm-bubble.sel{border-color:#ff7a00;color:#ff7a00;background:#fff8ee;box-shadow:0 0 0 3px rgba(255,122,0,.22),0 4px 12px rgba(255,122,0,.4);transform:translateX(-50%) scale(1.22);z-index:1000}
+.hm-bubble::after{content:'';position:absolute;left:50%;bottom:-5px;margin-left:-4px;width:0;height:0;border:4px solid transparent;border-top-color:inherit;border-bottom:0}
 .hotel-global{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
 .hg-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;transition:.15s}
 .hg-card:hover{border-color:#c9d2e0;box-shadow:0 3px 12px rgba(20,30,50,.08)}
@@ -1440,12 +1456,48 @@ function bookingMapUrl(d, rk){
   u.searchParams.set('selected_currency','CNY');
   return u.toString();
 }
+function highlightHotel(h){
+  if(!hotelMap || !h) return;
+  // 1) 重置所有气泡的选中态
+  hotelMarkers.forEach(m=>{
+    if(!m._hotelData) return;
+    const el=m._icon;
+    if(el){
+      const bub=el.querySelector('.hm-bubble');
+      if(bub) bub.classList.remove('sel');
+    }
+  });
+  // 2) 列表卡片去掉高亮
+  document.querySelectorAll('#hotelList .hotel-card').forEach(c=>c.classList.remove('is-sel'));
+  // 3) 找对应 marker
+  const key = h.name+'_'+h.cat;
+  const m = hotelMarkers.find(x=>x._hotelKey===key);
+  if(m){
+    const ll = m.getLatLng();
+    hotelMap.flyTo(ll, 14, {duration:.7});
+    const el=m._icon;
+    if(el){
+      const bub=el.querySelector('.hm-bubble');
+      if(bub){
+        bub.classList.add('sel');
+        bub.offsetHeight;
+      }
+    }
+    m.setZIndexOffset(1000);
+    m.openTooltip();
+  }
+  // 4) 列表卡片加高亮 + 滚到可见
+  const card = document.querySelector('#hotelList .hotel-card[data-key="'+key.replace(/"/g,'\"')+'"]');
+  if(card){
+    card.classList.add('is-sel');
+    card.scrollIntoView({block:'nearest', behavior:'smooth'});
+  }
+}
 function selectDest(code){
   const d=HOTEL_DATA[code]; if(!d||!hotelMap) return;
   const rk=destBest[code];
   if(rk && code2key[code]){ select(code2key[code], false, true); }   // 联动机票 / 天气 / 粘性选择器
   hotelSel=code;
-  // 海外目的地自动切到 OSM 标准英文底图（避免高德海外空白）
   if(isIntlCity(d.lat,d.lng) && hotelTileBase==='gaode') setHotelTiles('osm');
   hotelMap.flyTo([d.lat,d.lng], 12, {duration:.8});
   hotelLayer.clearLayers(); hotelMarkers=[];
@@ -1454,6 +1506,7 @@ function selectDest(code){
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
   // 8 瓣花布局 + 抖动 ≈ 550m 半径，酒店点位贴近城市坐标且不重叠
   const slots = Math.min(n, 8);
+  const colMap={budget:'#0f9960',chain:'#2563d9',airbnb:'#e02b3c'};
   all.forEach((h,i)=>{
     const ang = (Math.PI*2*(i%slots))/slots;
     const rad  = 0.006;
@@ -1461,11 +1514,19 @@ function selectDest(code){
     const jG = (((i*3673+12791)%198491)/198491 - 0.5) * 0.0006;
     const la = d.lat + Math.cos(ang)*rad + jL;
     const ln = d.lng + Math.sin(ang)*rad + jG;
-    const col={budget:'#0f9960',chain:'#2563d9',airbnb:'#e02b3c'}[h.cat];
-    const m=L.circleMarker([la,ln],{radius:5.5,color:'#fff',weight:1.5,fillColor:col,fillOpacity:.9}).addTo(hotelLayer);
-    const priceTxt = h.priceMax ? ('¥'+h.price+'–'+h.priceMax+'/晚') : ('¥'+h.price+'/晚起');
-    m.bindTooltip('<b>'+h.name+'</b><br><span style="color:#666">'+h.brand+' · '+priceTxt+(dep?'<br>入住 '+dep+' · 退房 '+ret:'')+'</span>',{direction:'top'});
-    m.on('click',()=>window.open(buildHotelUrl(h,rk),'_blank','noopener'));
+    const col=colMap[h.cat];
+    const priceTxt = h.priceMax ? ('¥'+h.price+'–'+h.priceMax) : ('¥'+h.price);
+    const icon = L.divIcon({
+      className:'hm-icon',
+      html:'<div class="hm-wrap"><div class="hm-bubble '+h.cat+'">'+priceTxt+'</div><div class="hm-dot"></div></div>',
+      iconSize:[0,0], iconAnchor:[0,0]
+    });
+    const m=L.marker([la,ln],{icon,riseOnHover:true}).addTo(hotelLayer);
+    const priceDetail = h.priceMax ? ('¥'+h.price+'–'+h.priceMax+'/晚') : ('¥'+h.price+'/晚起');
+    m.bindTooltip('<b>'+h.name+'</b><br><span style="color:#666">'+h.brand+' · '+priceDetail+(dep?'<br>入住 '+dep+' · 退房 '+ret:'')+'</span>',{direction:'right',offset:[8,0]});
+    m._hotelKey = h.name+'_'+h.cat;
+    m._hotelData = h;
+    m.on('click',()=>{ highlightHotel(h); });
     hotelMarkers.push(m);
   });
   // 城市中心白色小点（永久标签）
@@ -1497,12 +1558,22 @@ function renderHotelList(){
       const price=h.priceMax?('¥'+h.price+'–'+h.priceMax+'/晚'):('¥'+h.price+'/晚起');
       const catLabel=DATA.hotelCats.find(c=>c.key===h.cat).label;
       const url=buildHotelUrl(h,rk);
-      return '<a class="hotel-card" href="'+url+'" target="_blank" rel="noopener">'+
+      const key=h.name+'_'+h.cat;
+      return '<div class="hotel-card" data-key="'+key+'" data-url="'+url+'">'+
         '<div class="hc-top"><span class="hc-cat" style="background:'+colMap[h.cat]+'">'+catLabel+'</span><span class="hc-price">'+price+'</span></div>'+
         '<div class="hc-name">'+h.name+'</div>'+
         (dep?'<div class="hc-date" style="font-size:10.5px;color:var(--tx3);margin-top:2px">✈️ 机票推荐行程 '+dep+' → '+ret+'（共 '+tripDays(dep,ret)+' 晚）</div>':'')+
-        '<div class="hc-go">查看 / 预订 →</div></a>';
+        '<div class="hc-go"><a href="'+url+'" target="_blank" rel="noopener" data-trip>在携程打开预订 →</a></div></div>';
     }).join('');
+  // 卡片点击联动地图（div 化后由 JS 绑事件，stopPropagation 避免点链接时误触）
+  list.querySelectorAll('.hotel-card').forEach(card=>{
+    card.addEventListener('click', e=>{
+      if(e.target.closest('a')) return;  // 点内部链接不触发地图联动
+      const key=card.dataset.key;
+      const h=(items.find(x=>(x.name+'_'+x.cat)===key));
+      if(h) highlightHotel(h);
+    });
+  });
   const back=document.getElementById('hotelListBackBtn');
   if(back) back.onclick = ()=>drawHotelGlobal();
 }
