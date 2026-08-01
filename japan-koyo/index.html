@@ -1515,17 +1515,28 @@ function setHotelMode(html){
   const back=document.getElementById('hotelBackBtn');
   if(back) back.onclick = ()=>drawHotelGlobal();
 }
-// 携程「酒店地图找房」URL（hotels.ctrip.com 专用地图找房页，d-country/d-name 即可；d-city 编号会因城市而异，省略后携程按 d-name 自动匹配）
+// 携程「酒店地图找房」URL —— 携程 SPA 必须有 d-city 数字 ID 才能定位城市，d-name 仅作显示
+// - 表内城市用 d-country + d-city + d-name 三参（保证正确显示）
+// - 表外城市兜底：用 hotels.ctrip.com/hotels/ 酒店搜索页（按 d-name 模糊搜索）+ 携带日期
 function tripMapUrl(d, rk){
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
-  const u = new URL('https://hotels.ctrip.com/hotels/hotelmap/map');
-  u.searchParams.set('d-country', '1');
-  u.searchParams.set('d-name', d.city);
+  const m = CITY_TRIP_ID[d.code];
+  if(m){
+    const u = new URL('https://hotels.ctrip.com/hotels/hotelmap/map');
+    u.searchParams.set('d-country', String(m.country));
+    u.searchParams.set('d-city', String(m.city));
+    u.searchParams.set('d-name', m.name || d.city);
+    if(dep) u.searchParams.set('checkin', dep);
+    if(ret) u.searchParams.set('checkout', ret);
+    u.searchParams.set('adult', '1');
+    return u.toString();
+  }
+  // 兜底：酒店搜索页（按 d-name 模糊搜索，可正确显示任意城市）
+  const u = new URL('https://hotels.ctrip.com/hotels/');
+  u.searchParams.set('query', d.city);
   if(dep) u.searchParams.set('checkin', dep);
   if(ret) u.searchParams.set('checkout', ret);
   u.searchParams.set('adult', '1');
-  u.searchParams.set('cruise', '0');
-  u.searchParams.set('mproom', '0');
   return u.toString();
 }
 function bookingMapUrl(d, rk){
