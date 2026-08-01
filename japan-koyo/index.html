@@ -832,14 +832,22 @@ input[type=text]{flex:1}
 .hvtab:hover{border-color:var(--blue);color:var(--blue)}
 .hvtab.on:hover{color:#fff}
 .hotel-view-stage{position:relative;width:100%;height:580px}
-#hotelMap, #hotelOsm, #hotelTrip, #hotelBooking, #hotelAirbnb{position:absolute;inset:0;width:100%;height:100%;border:0}
+#hotelMap, #hotelOsm, #hotelTrip, #hotelBooking{position:absolute;inset:0;width:100%;height:100%;border:0}
 #hotelMap{background:#eef0f3}
 .hotel-iframe-wrap{position:absolute;inset:0;background:#fff}
 .hotel-iframe-wrap iframe{width:100%;height:100%;border:0;display:block}
 .hotel-iframe-fail{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:#fff;padding:20px;text-align:center}
 .hotel-iframe-fail.show{display:flex}
 .hotel-iframe-fail a{color:var(--blue);text-decoration:none;border-bottom:1px dashed var(--blue)}
-#hotelMap, #hotelAirbnb{height:580px;width:100%}
+#hotelMap{height:580px;width:100%}
+/* Airbnb 专用降级卡片（不用 iframe：X-Frame-Options 拒绝时 Chrome 会在 native 层画 ERR_BLOCKED_BY_RESPONSE，盖不住 host 文档的 div；索性不放 iframe，整张卡片占位） */
+#hotelAirbnbWrap{background:linear-gradient(135deg,#fff5f6 0%,#fff 70%)}
+.airbnb-card{display:flex;flex-direction:column;align-items:center;gap:14px;max-width:420px;padding:0 12px}
+.airbnb-card .airbnb-logo{font-size:42px;line-height:1}
+.airbnb-card .airbnb-title{font-size:15px;font-weight:700;color:#e02b3c}
+.airbnb-card .airbnb-desc{font-size:12px;color:var(--tx3);line-height:1.55}
+.airbnb-card .airbnb-btn{display:inline-flex;align-items:center;gap:6px;padding:11px 22px;background:#e02b3c;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:13.5px;box-shadow:0 3px 10px rgba(224,43,60,.28);transition:.15s;border-bottom:0!important}
+.airbnb-card .airbnb-btn:hover{background:#c0111f;box-shadow:0 4px 14px rgba(192,17,31,.35);transform:translateY(-1px)}
 /* 酒店信息浮层（右下角小角标，避开左上 tab + 右上瓦片控件） */
 .hotel-mode{position:absolute;right:10px;bottom:10px;z-index:500;background:rgba(255,255,255,.88);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:10.5px;color:var(--tx2);box-shadow:0 1px 4px rgba(20,30,50,.08);max-width:340px;line-height:1.4;pointer-events:none;text-align:right}
 .hotel-mode b{color:var(--tx);font-weight:600}
@@ -1095,11 +1103,14 @@ input[type=text]{flex:1}
             </div>
           </div>
           <div class="hotel-iframe-wrap" id="hotelAirbnbWrap" style="display:none">
-            <iframe id="hotelAirbnb" title="Airbnb" loading="lazy"></iframe>
-            <div class="hotel-iframe-fail" id="hotelAirbnbFail">
-              <div style="font-size:13px;font-weight:600">⚠️ Airbnb 不支持网页内嵌</div>
-              <div style="font-size:11px;color:var(--tx3)">（X-Frame-Options 安全策略限制，浏览器禁止在 iframe 中加载 Airbnb）。已为你生成对应目的地+日期的搜索链接：</div>
-              <a id="hotelAirbnbOpen" href="#" target="_blank" rel="noopener">↗ 在新窗口打开 Airbnb 搜索</a>
+            <div class="hotel-iframe-fail show" id="hotelAirbnbFail">
+              <div class="airbnb-card">
+                <div class="airbnb-logo">🏠</div>
+                <div class="airbnb-title">Airbnb 不支持网页内嵌</div>
+                <div class="airbnb-desc">浏览器安全策略（X-Frame-Options）禁止在 iframe 中加载 Airbnb。已根据当前目的地与出行日期生成搜索链接，点击下方按钮在新窗口打开 Airbnb 地图模式：</div>
+                <a class="airbnb-btn" id="hotelAirbnbOpen" href="#" target="_blank" rel="noopener">↗ 在新窗口打开 Airbnb 搜索</a>
+                <div class="airbnb-desc" id="hotelAirbnbMeta" style="font-size:11px;opacity:.7"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1649,16 +1660,15 @@ function refreshHotelIframes(d, rk){
   }
   const bkOpenA=document.getElementById('hotelBookingOpen'); if(bkOpenA) bkOpenA.href=bkUrl;
   const abUrl=airbnbMapUrl(d,rk);
-  const abI=document.getElementById('hotelAirbnb');
-  if(abI){
-    abI.onload=()=>hideFail('hotelAirbnbFail');
-    abI.onerror=()=>showFail('hotelAirbnbFail');
-    if(abI.src && abI.src!=='about:blank'){ abI.src='about:blank'; setTimeout(()=>{ abI.src=abUrl; }, 30); }
-    else { abI.src=abUrl; }
-  }
+  // Airbnb 不放 iframe（X-Frame-Options 触发时 Chrome 在 native 层画 ERR_BLOCKED_BY_RESPONSE，盖不住 host 文档的 div）
+  // 直接用降级卡片占位 #hotelAirbnbWrap
   const abOpenA=document.getElementById('hotelAirbnbOpen'); if(abOpenA) abOpenA.href=abUrl;
-  // Airbnb 已知禁止 iframe 嵌入（X-Frame-Options: SAMEORIGIN），直接展示「新窗口打开」引导，不等 onerror
-  showFail('hotelAirbnbFail');
+  const abMeta=document.getElementById('hotelAirbnbMeta');
+  if(abMeta){
+    const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
+    const dateTxt = (dep && ret) ? (dep+' → '+ret) : (d.city==='东亚' ? '请先在地图上点选具体目的地' : '请选择出行日期');
+    abMeta.textContent = '当前：'+d.city+(dateTxt?' · '+dateTxt:'');
+  }
 }
 function refreshGlobalIframes(){
   // 全球视图：中央标点 = 东亚中心
