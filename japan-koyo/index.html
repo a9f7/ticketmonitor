@@ -1254,6 +1254,20 @@ function initSticky(){
     if(newR){ state.sel = newR.key; }
     // 找不到时保留原 state.sel，syncSticky 内部会显示「该出发地暂无该目的地数据」
     populateDestDropdown();   // 切完出发地，刷新目的地下拉，只显示该出发地的航线
+    rebuildDestBest();         // 按新出发地重建 destBest（修 embed/酒店卡片仍用旧 origin route 的 bug）
+    // hotelSel 在新出发地下可能不存在；若仍在，重新渲染酒店视图（让 embed/酒店列表用新 origin 的日期）
+    if(hotelSel){
+      const newHR = destBest[hotelSel];
+      if(newHR){
+        const d2 = HOTEL_DATA[hotelSel];
+        if(d2){ try{ selectDest(hotelSel, newHR); }catch(_e){ refreshHotelIframes(d2, newHR); } }
+      } else {
+        // 该目的地在新出发地下无 route，回到全球视图
+        hotelSel = null;
+        try{ drawHotelGlobal(); }catch(_e){}
+        try{ refreshGlobalIframes(); }catch(_e){}
+      }
+    }
     render();
     syncSticky(newR || byKey[state.sel] || null);
     if(newR) map.flyTo([newR.lat, newR.lng], 4, {duration:.7});
@@ -1311,7 +1325,16 @@ initSticky();
 const HOTEL_DATA = DATA.hotels || {};
 const HOTEL_DESTS = Object.values(HOTEL_DATA);
 let hotelMap=null, hotelLayer=null, hotelMarkers=[], hotelCat='budget', hotelSel=null;
-const destBest={}; DATA.routes.forEach(r=>{ if(!destBest[r.code]||r.minPrice<destBest[r.code].minPrice) destBest[r.code]=r; });
+// destBest 按当前 state.origins 集合重建（切换出发地后必须刷新，否则 embed / 酒店卡片仍引用旧 origin 下的 route，导致日期/价格与顶部选择器对不上）
+let destBest={};
+function rebuildDestBest(){
+  destBest={};
+  DATA.routes.forEach(r=>{
+    if(state.origins.size && !state.origins.has(r.originCode)) return;
+    if(!destBest[r.code] || r.minPrice<destBest[r.code].minPrice) destBest[r.code]=r;
+  });
+}
+rebuildDestBest();
 // 把 OTA URL 中的 __CHECKIN__/__CHECKOUT__ 替换为该目的地推荐航线的实际日期
 function buildHotelUrl(h, route){
   if(!route) return h.url;
@@ -1442,7 +1465,7 @@ function select(key,fromMap,quiet){
     const r=byKey[key]; drawLine(key);
     if(fromMap){ const el=document.querySelector('.item[data-key="'+key+'"]'); if(el){el.classList.add('open');el.scrollIntoView({behavior:'smooth',block:'center'});} }
     else if(!quiet&&r){ if(markers[key]) markers[key].openTooltip(); }
-    syncHotels(r?r.code:null);
+    syncHotels(r?r.code:null, r);   // 透传选中航线 r，避免 embed 退化为「同目的地最便宜路线」的日期
     syncSticky(r);
     if(r && typeof wSelect==='function' && DATA.weather && DATA.weather.trips && DATA.weather.trips.length && typeof wTrips!=='undefined' && wTrips[r.code]) wSelect(r.code, false, true);
   } finally { _inSelect=false; }
@@ -1737,9 +1760,10 @@ function highlightHotel(h){
     card.scrollIntoView({block:'nearest', behavior:'smooth'});
   }
 }
-function selectDest(code){
+function selectDest(code, rk){
   const d=HOTEL_DATA[code]; if(!d||!hotelMap) return;
-  const rk=destBest[code];
+  // rk 优先：用户实际点击的航线 > 全局 destBest（按 origin 重建后的最便宜）
+  if(!rk) rk = destBest[code];
   if(rk && code2key[code]){ try{ select(code2key[code], false, true); }catch(e){ /* 选择器联动失败不影响酒店/地图刷新 */ } }   // 联动机票 / 天气 / 粘性选择器
   hotelSel=code;
   if(isIntlCity(d.lat,d.lng) && hotelTileBase==='gaode') setHotelTiles('osm');
@@ -1829,10 +1853,18 @@ function renderHotelList(){
   const back=document.getElementById('hotelListBackBtn');
   if(back) back.onclick = ()=>drawHotelGlobal();
 }
-function syncHotels(code){
+function syncHotels(code, rk){
   if(!hotelMap) return;            // 初始化前跳过
-  if(code===hotelSel) return;
-  if(code) selectDest(code); else drawHotelGlobal();
+  if(HOTEL_DATA[code]){
+    // 用用户实际点击的路线 rk（destBest 只是兜底），保证 embed 日期/价格与选中航线一致
+    if(code===hotelSel && rk===destBest[code]) return;
+    selectDest(code, rk);
+  } else if(hotelSel !== null){
+    // 该目的地无酒店数据：避免 embed 卡在旧目的地（用户切到一个没收录酒店的城市时尤其明显），重置到全球视图
+    hotelSel = null;
+    try{ drawHotelGlobal(); }catch(_e){}
+    try{ refreshGlobalIframes(); }catch(_e){}
+  }
 }
 if(HOTEL_DESTS.length) initHotel();
 
