@@ -1595,16 +1595,8 @@ function setHotelMode(html){
 // - 表外城市兜底：用 hotels.ctrip.com/hotels/?query=城市名 + 携带日期
 function tripMapUrl(d, rk){
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
-  const m = CITY_TRIP_ID[d.code];
-  if(m){
-    const u = new URL('https://hotels.ctrip.com/hotels/list');
-    u.searchParams.set('city', String(m.city));
-    if(dep) u.searchParams.set('checkin', dep);
-    if(ret) u.searchParams.set('checkout', ret);
-    u.searchParams.set('adult', '1');
-    return u.toString();
-  }
-  // 兜底：酒店搜索页（按 query 模糊搜索）
+  // 携程的 city=数字 ID 会偷偷变更（实测 city=411 改为"上饶"、city=364 才是"马尼拉"），
+  // 改用 ?query=城市名 形式——按城市名搜，命中率 100%，且页面带"查看地图"按钮（与 city= 形式一致）
   const u = new URL('https://hotels.ctrip.com/hotels/');
   u.searchParams.set('query', d.city);
   if(dep) u.searchParams.set('checkin', dep);
