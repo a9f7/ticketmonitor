@@ -1560,16 +1560,15 @@ function setHotelMode(html){
 // - 表内城市用 /hotels/list?city=X&checkin=... 走「酒店列表 + 顶部搜索框预填」入口（实测 value="上海"/"东京" 已预填）
 // - 页面右上角有「查看地图」按钮可切到地图视图；直接用 /hotels/hotelmap/map 时 d-name 不写入搜索框（destination 为空）
 // - 表外城市兜底：用 hotels.ctrip.com/hotels/?query=城市名 + 携带日期
+function _cacheBust(u){ const x=new URL(u); x.searchParams.set('_', String(Date.now())); return x.toString(); }
 function tripMapUrl(d, rk){
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
-  // 携程的 city=数字 ID 会偷偷变更（实测 city=411 改为"上饶"、city=364 才是"马尼拉"），
-  // 改用 ?query=城市名 形式——按城市名搜，命中率 100%，且页面带"查看地图"按钮（与 city= 形式一致）
   const u = new URL('https://hotels.ctrip.com/hotels/');
   u.searchParams.set('query', d.city);
   if(dep) u.searchParams.set('checkin', dep);
   if(ret) u.searchParams.set('checkout', ret);
   u.searchParams.set('adult', '1');
-  return u.toString();
+  return _cacheBust(u.toString());
 }
 function bookingMapUrl(d, rk){
   const dep=rk?.options[0]?.depDate, ret=rk?.options[0]?.retDate;
@@ -1583,7 +1582,7 @@ function bookingMapUrl(d, rk){
   u.searchParams.set('map','1');
   u.searchParams.set('lang','zh-cn');
   u.searchParams.set('selected_currency','CNY');
-  return u.toString();
+  return _cacheBust(u.toString());
 }
 function airbnbMapUrl(d, rk){
   // Airbnb 禁止 iframe 嵌入（X-Frame-Options: SAMEORIGIN），此 URL 仅供「在新窗口打开」用（需预填目的地+日期+地图模式）
