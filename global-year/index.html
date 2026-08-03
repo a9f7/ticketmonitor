@@ -826,16 +826,18 @@ input[type=text]{flex:1}
 .kc-best{font-size:9.5px;margin-top:5px;padding:2px 7px;border-radius:4px;background:#fdecee;color:#b0251a;font-weight:600;display:inline-block}
 
 /* 酒店推荐板块 */
-.hotel-sec .hotel-tabs{display:flex;gap:8px;margin:12px 0 10px;flex-wrap:wrap}
-.htab{font-size:12px;padding:5px 14px;border:1px solid var(--line);border-radius:20px;background:var(--panel);cursor:pointer;color:var(--tx2);font-weight:600;transition:.15s}
+.htab{font-size:11px;padding:4px 10px;border:1px solid var(--line);border-radius:14px;background:var(--panel);cursor:pointer;color:var(--tx2);font-weight:600;transition:.15s;white-space:nowrap}
 .htab:hover{border-color:#c9d2e0}
 .htab.on{background:var(--tx);color:#fff;border-color:var(--tx)}
 .hotel-main{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .hotel-main.embed{grid-template-columns:1fr}   /* 切到携程/Booking/OSM 嵌入时独享整宽（嵌入页自含酒店列表） */
 .hotel-main.embed .hotel-list{display:none}
 .hotel-map-wrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#eef0f3}
-/* 5 视图 tab：Leaflet / OSM / 携程 / Booking / Airbnb */
-.hotel-views{display:flex;gap:6px;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:#f7f9fc}
+/* 5 视图 tab：Leaflet / OSM / 携程 / Booking / Airbnb；分类标签紧靠右侧，只在「自做标点」显示 */
+.hotel-views{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:#f7f9fc}
+.hvtab-group{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 auto}
+.hotel-cat-tabs{display:none;gap:6px;flex-wrap:wrap;margin-left:auto}
+.hotel-cat-tabs.show{display:flex}
 .hvtab{font-size:11px;padding:4px 10px;border:1px solid var(--line);border-radius:14px;background:#fff;cursor:pointer;color:var(--tx2);font-weight:600;transition:.15s}
 .hvtab.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 .hvtab:hover{border-color:var(--blue);color:var(--blue)}
@@ -1049,18 +1051,20 @@ input[type=text]{flex:1}
     <div class="sec-hd">
       <h2>🏨 目的地酒店推荐<small>选定目的地后自动切换为当地酒店 · 含地图定位</small></h2>
     </div>
-    <div class="hotel-tabs" id="hotelTabs">
-      <div class="htab on" data-cat="budget">💰 平价酒店</div><div class="htab" data-cat="chain">🏨 外资连锁酒店</div><div class="htab" data-cat="airbnb">🏡 Airbnb</div>
-    </div>
     <div class="hotel-main">
       <div class="hotel-map-wrap">
         <div class="hotel-mode" id="hotelMode">🌍 全球酒店分布</div>
         <div class="hotel-views" id="hotelViews">
-          <div class="hvtab on" data-view="leaflet">🗺 自做标点</div>
-          <div class="hvtab" data-view="osm">🌐 OSM 实图（嵌入）</div>
-          <div class="hvtab" data-view="trip">🗺 携程（国内站 · 列表）</div>
-          <div class="hvtab" data-view="booking">🗺 Booking（嵌入）</div>
-          <div class="hvtab" data-view="airbnb">🏠 Airbnb（新窗口）</div>
+          <div class="hvtab-group">
+            <div class="hvtab on" data-view="leaflet">🗺 自做标点</div>
+            <div class="hvtab" data-view="osm">🌐 OSM 实图（嵌入）</div>
+            <div class="hvtab" data-view="trip">🗺 携程（国内站 · 列表）</div>
+            <div class="hvtab" data-view="booking">🗺 Booking（嵌入）</div>
+            <div class="hvtab" data-view="airbnb">🏠 Airbnb（新窗口）</div>
+          </div>
+          <div class="hotel-cat-tabs show" id="hotelTabs">
+            <div class="htab on" data-cat="budget">💰 平价酒店</div><div class="htab" data-cat="chain">🏨 外资连锁酒店</div><div class="htab" data-cat="airbnb">🏡 Airbnb</div>
+          </div>
         </div>
         <div class="hotel-view-stage" id="hotelStage">
           <div id="hotelMap"></div>
@@ -1671,6 +1675,9 @@ function setHotelView(v){
     if(k==='leaflet'){ wrap.style.display = (v==='leaflet') ? '' : 'none'; if(v==='leaflet' && hotelMap) setTimeout(()=>hotelMap.invalidateSize(),50); }
     else{ wrap.style.display = (v===k) ? '' : 'none'; }
   });
+  // 酒店分类标签只在「自做标点」视图有意义
+  const catTabs=document.getElementById('hotelTabs');
+  if(catTabs) catTabs.classList.toggle('show', v==='leaflet');
   // 切到嵌入视图时让酒店地图区域独享整宽（嵌入页自含酒店列表）
   const main = document.querySelector('.hotel-main');
   if(main) main.classList.toggle('embed', v!=='leaflet');
