@@ -784,22 +784,26 @@ input[type=text]{flex:1}
 .wtab:hover{border-color:#c9d2e0}.wtab.on{background:var(--tx);color:#fff;border-color:var(--tx)}
 .wlist{overflow-y:auto;flex:1;padding:8px}
 .wlist::-webkit-scrollbar{width:8px}.wlist::-webkit-scrollbar-thumb{background:#d3d8e0;border-radius:4px}
-.wgroup-hd{font-size:11px;font-weight:700;color:var(--tx2);padding:8px 8px 4px;display:flex;align-items:center;gap:6px;position:sticky;top:0;background:#fff;z-index:2}
-.wrow{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:.13s;background:#fff}
+.wgroup-hd{font-size:11px;font-weight:700;color:var(--tx2);padding:6px 8px 3px;display:flex;align-items:center;gap:6px;position:sticky;top:0;background:#fff;z-index:2}
+.wrow{border:1px solid var(--line);border-radius:9px;padding:6px 9px;margin-bottom:5px;cursor:pointer;transition:.13s;background:#fff}
 .wrow:hover{border-color:#c3cddd;box-shadow:0 2px 10px rgba(20,30,50,.06)}
 .wrow.sel{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-soft)}
 .wr-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .wr-city{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
 .wr-city .code{font-size:10px;color:var(--tx3);font-weight:500;background:#f2f4f7;padding:1px 5px;border-radius:4px}
 .wr-g{font-size:10px;padding:1px 7px;border-radius:4px;color:#fff;font-weight:600;white-space:nowrap}
-.wr-sub{font-size:11px;color:var(--tx2);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+.wr-sub{font-size:10.5px;color:var(--tx2);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;row-gap:2px}
 .wr-sub b{color:var(--tx);font-weight:600}
-.wfc{border-top:1px solid var(--line2);margin-top:7px;padding-top:6px;display:none}
+.wfc{border-top:1px solid var(--line2);margin-top:5px;padding-top:5px;display:none}
 .wrow.open .wfc{display:block}
-.wfclist{display:flex;overflow-x:auto;gap:4px;padding-bottom:4px}
-.wfcday{flex:0 0 auto;width:64px;border:1px solid var(--line2);border-radius:7px;padding:4px 3px;text-align:center;font-size:10px;background:#fafbfc}
-.wfcday .d{color:var(--tx3);font-size:9.5px}.wfcday .t{font-weight:700;font-size:11px}
-.wfcday .p{font-size:9.5px;color:var(--blue)}.wfcday .r{font-size:14px}
+.wfclist{display:flex;overflow-x:auto;gap:3px;padding-bottom:3px;-webkit-overflow-scrolling:touch}
+.wfclist::-webkit-scrollbar{height:5px}.wfclist::-webkit-scrollbar-thumb{background:#d3d8e0;border-radius:3px}
+.wfcday{flex:0 0 auto;width:54px;border:1px solid var(--line2);border-radius:6px;padding:3px 2px 2px;text-align:center;font-size:9.5px;line-height:1.25;background:#fafbfc}
+.wfcday .d{color:var(--tx3);font-size:9px}.wfcday .t{font-weight:700;font-size:10.5px}
+.wfcday .p{font-size:9px;color:var(--blue);white-space:nowrap}.wfcday .r{font-size:13px}
+@media(max-width:1100px){.wfcday{width:50px;padding:3px 1px}.wfcday .r{font-size:12px}}
+@media(max-width:780px){.wfcday{width:46px;font-size:9px}.wfcday .t{font-size:10px}.wfcday .p{font-size:8.5px}.wr-city{font-size:13px}.wr-sub{font-size:10px;gap:5px}}
+@media(max-width:420px){.wfcday{width:42px;padding:2px 1px}.wfcday .r{font-size:11px}.wrow{padding:5px 7px}}
 .wsrc{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px}
 .wsrc b{font-size:12px;display:block;margin-bottom:6px}
 .wsrc a{color:var(--blue);text-decoration:none;font-size:11.5px;display:block;margin:3px 0;word-break:break-all}
@@ -1136,7 +1140,7 @@ const TIER_LABEL={"T1":"<¥1000","T2":"¥1000-1500","T3":"¥1500-2000","T4":"¥2
 const TIER_COLOR={"T1":{"dot":"#e02b3c","bg":"#249213216","bc":"#2308599","txt":"#1843549"},"T2":{"dot":"#f0731e","bg":"#252227210","bc":"#24314375","txt":"#1979425"},"T3":{"dot":"#e0a91e","bg":"#249238210","bc":"#23018675","txt":"#18413925"},"T4":{"dot":"#1f9bb3","bg":"#210235240","bc":"#76175194","txt":"#25127147"},"T5":{"dot":"#2563d9","bg":"#211224247","bc":"#81130225","txt":"#3081178"}};
 const ORIGINS=DATA.origins;
 const orgLL={}; ORIGINS.forEach(o=>orgLL[o.code]=o);
-const W={ dry:{color:'#0f9960',bg:'#e7f6ee',label:'干爽少雨'}, mild:{color:'#2563d9',bg:'#eaf0fd',label:'偶有阵雨'}, wet:{color:'#e08a1e',bg:'#fdf3e4',label:'多雨'}, heavy:{color:'#e02b3c',bg:'#fdecee',label:'强降雨频繁'} };
+const W={ dry:{color:'#0f9960',bg:'#e7f6ee',label:'干爽少雨',desc:'无强降雨，晴日≥3'}, mild:{color:'#2563d9',bg:'#eaf0fd',label:'偶有阵雨',desc:'偶有阵雨，无强降雨'}, wet:{color:'#e08a1e',bg:'#fdf3e4',label:'多雨',desc:'降雨较多，强降雨≤2'}, heavy:{color:'#e02b3c',bg:'#fdecee',label:'强降雨频繁',desc:'≥3个暴雨日'} };
 const wOrder=['dry','mild','wet','heavy'];
 let state={tier:'all',sort:'price',q:'',regions:new Set(),origins:new Set(DATA.gbaCodes),sel:null};
 let _inSelect=false;  // 防止 select↔selectDest 互调死循环
@@ -1866,11 +1870,11 @@ if(WEATHER && WEATHER.trips && WEATHER.trips.length){
   function wIcon(code,prcp){ if(code==null) return prcp<1?'☀️':(prcp<25?'⛅':'🌧️'); if(code<=3)return'☀️'; if(code<=48)return'⛅'; return'🌧️'; }
   function wRowHTML(t){
     const g=W[t.grade];
-    const fc= t.daily && t.daily.length ? t.daily.map(d=>{ const heavy=d.prcp>=25, wet=d.prcp>=1; const col= heavy?'#fdecee':(wet?'#eaf0fd':'#e7f6ee'); return '<div class="wfcday" style="background:'+col+'"><div class="d">'+d.date.slice(5)+'</div><div class="r">'+wIcon(d.code,d.prcp)+'</div><div class="t">'+Math.round(d.tmax)+'°</div><div class="p">💧'+Math.round(d.pop)+'% '+Math.round(d.prcp)+'mm</div></div>'; }).join('') : '';
+    const fc= t.daily && t.daily.length ? t.daily.map(d=>{ const heavy=d.prcp>=25, wet=d.prcp>=1; const col= heavy?'#fdecee':(wet?'#eaf0fd':'#e7f6ee'); return '<div class="wfcday" style="background:'+col+'"><div class="d">'+d.date.slice(5)+'</div><div class="r">'+wIcon(d.code,d.prcp)+'</div><div class="t">'+Math.round(d.tmax)+'°</div><div class="p">'+Math.round(d.pop)+'% · '+Math.round(d.prcp)+'mm</div></div>'; }).join('') : '';
     return '<div class="wrow" data-code="'+t.code+'">'+
       '<div class="wr-top"><div class="wr-city">'+t.city+'<span class="code">'+t.code+'</span></div><span class="wr-g" style="background:'+g.color+'">'+g.label+'</span></div>'+
       '<div class="wr-sub"><span>'+t.originCity+'出发</span><span>出行 <b>'+t.dep.slice(5)+'~'+t.ret.slice(5)+'</b> · '+t.summary.days+'天</span><span>晴日 <b>'+t.summary.dryDays+'/'+t.summary.days+'</b></span><span>累计降雨 <b>'+t.summary.totalPrcp+' mm</b></span><span>降雨概率均 <b>'+t.summary.avgPop+'%</b></span><span>高温 <b>'+t.summary.tmax+'°</b></span>'+(t.tier?('<span class="badge '+(t.tier==='T1'||t.tier==='T2'?'r':'')+'">机票 '+TIER_LABEL[t.tier]+' ¥'+t.minPrice+'</span>'):'')+'</div>'+
-      '<div class="wfc">'+fc+'</div></div>';
+      '<div class="wfc"><div class="wfclist">'+fc+'</div></div></div>';
   }
   function renderWList(){
     const wg=wState.grade; let h='';
