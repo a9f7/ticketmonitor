@@ -1148,7 +1148,29 @@ const W={ dry:{color:'#0f9960',bg:'#e7f6ee',label:'干爽少雨',desc:'无强降
 const wOrder=['dry','mild','wet','heavy'];
 let state={tier:'all',sort:'price',q:'',regions:new Set(),origins:new Set(DATA.gbaCodes),sel:null};
 let _inSelect=false;  // 防止 select↔selectDest 互调死循环
+let userBaseState={origins:new Set(state.origins),sel:null}; // 用户主动选择的出发地/目的地，用于推荐位点击后恢复
+let pickPreview=false; // 是否因点击推荐位进入临时预览状态
 function tripDays(a,b){return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000);}
+function saveUserBaseState(){ userBaseState={origins:new Set(state.origins),sel:state.sel}; }
+function wgradeScore(r){ const g=r.weather&&r.weather.grade; if(g==='dry')return 3; if(g==='mild')return 2; if(g==='wet')return 1; return 0; }
+// 按当前出发地集合动态计算各档推荐：价格优先，价差≤15%时天气好的优先
+function computePicksForOrigins(originsSet){
+  const res={};
+  TIER_KEYS.forEach(t=>{
+    const list=DATA.routes.filter(r=>r.tier===t && originsSet.has(r.originCode));
+    if(!list.length){ res[t]=null; return; }
+    list.sort((a,b)=>{
+      const priceDiff=a.minPrice-b.minPrice;
+      const threshold=Math.max(a.minPrice,b.minPrice)*0.15;
+      if(Math.abs(priceDiff)>threshold) return priceDiff;
+      const ws=wgradeScore(b)-wgradeScore(a);
+      if(ws!==0) return ws;
+      return priceDiff;
+    });
+    res[t]={cheapest:list[0].key};
+  });
+  return res;
+}
 const byKey={}; DATA.routes.forEach(r=>byKey[r.key]=r);
 const code2key={}; DATA.routes.forEach(r=>{ if(!code2key[r.code]) code2key[r.code]=r.key; });
 
@@ -1179,6 +1201,8 @@ function initSticky(){
       state.sel = finalR.key;
       select(finalR.key, false);                     // ← fromMap=false：不触发 scrollIntoView，留在原地
       map.flyTo([finalR.lat, finalR.lng], 4, {duration:.7});
+      pickPreview=false;
+      saveUserBaseState();
     }
     sel.value='';
   };
@@ -1243,6 +1267,9 @@ function initSticky(){
         try{ refreshGlobalIframes(); }catch(_e){}
       }
     }
+    pickPreview=false;
+    saveUserBaseState();
+    renderPicks();
     render();
     syncSticky(newR || byKey[state.sel] || null);
     if(newR) map.flyTo([newR.lat, newR.lng], 4, {duration:.7});
@@ -1295,6 +1322,23 @@ function syncSticky(r){
     wPill;
 }
 initSticky();
+// 初始化用户基准状态为默认大湾区+当前默认选中航线
+saveUserBaseState();
+
+// 点击页面空白处恢复推荐位预览前的原始出发地/目的地
+// 排除 sticky 选择器、推荐卡片、列表项、地图、酒店区、chip/tab 等主动交互区域
+document.addEventListener('click',(e)=>{
+  if(!pickPreview) return;
+  const t=e.target;
+  if(t.closest('.sticky-selector')) return;
+  if(t.closest('.picks')) return;
+  if(t.closest('.item')) return;
+  if(t.closest('.map-wrap')) return;
+  if(t.closest('.hotel-sec')) return;
+  if(t.closest('.chip')) return;
+  if(t.closest('.tab')) return;
+  restoreUserBaseState();
+});
 
 // 酒店推荐板块状态（变量在此声明，确保 select() 首次调用时已初始化）
 const HOTEL_DATA = DATA.hotels || {};
@@ -1460,7 +1504,9 @@ function select(key,fromMap,quiet){
   if(state.sel===key && quiet) return;  // 同一 key 重复静默调用直接返回
   _inSelect=true;
   try{
+    if(pickPreview && !quiet) pickPreview=false;  // 列表/地图等主动交互退出推荐位预览
     state.sel=key;
+    if(!quiet) saveUserBaseState();  // 用户主动选择目的地时保存为新的基准
     document.querySelectorAll('.item').forEach(el=>el.classList.toggle('sel',el.dataset.key===key));
     const r=byKey[key]; drawLine(key);
     if(fromMap){ const el=document.querySelector('.item[data-key="'+key+'"]'); if(el){el.classList.add('open');el.scrollIntoView({behavior:'smooth',block:'center'});} }
@@ -1490,18 +1536,49 @@ function pickCard(tier,key){
     wBadge+kBadge+'</div>';
 }
 function renderPicks(){
+  const picks=computePicksForOrigins(state.origins);
   let h='';
-  TIER_KEYS.forEach(t=>{ const p=DATA.picks[t]; if(!p||!p.cheapest) return; h+=pickCard(t,p.cheapest); });
-  if(!h) h='<div class="empty">当前各档暂无命中航线</div>';
+  TIER_KEYS.forEach(t=>{ const key=picks[t]&&picks[t].cheapest; if(!key) return; h+=pickCard(t,key); });
+  if(!h) h='<div class="empty">当前出发地暂无命中航线</div>';
   document.getElementById('picks').innerHTML=h;
   document.querySelectorAll('.pick').forEach(el=>{
-    el.onclick=()=>{ const k=el.dataset.key; const r=byKey[k];
-      state.tier='all'; state.regions.clear(); state.origins.clear(); state.q=''; document.getElementById('q').value='';
-      document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tier==='all'));
-      document.querySelectorAll('#origins .chip').forEach(t=>t.classList.remove('on'));
-      document.querySelectorAll('#regions .chip').forEach(t=>t.classList.remove('on'));
-      render(); select(k,true); map.flyTo([r.lat,r.lng],4,{duration:.8}); };
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const k=el.dataset.key; const r=byKey[k]; if(!r) return;
+      if(!pickPreview) saveUserBaseState();
+      // 临时切到该推荐航线对应的出发地+目的地，并在 sticky 顶置显示
+      state.origins=new Set([r.originCode]);
+      const oSel=document.getElementById('ssOriginSelect'); if(oSel) oSel.value=r.originCode;
+      document.querySelectorAll('#origins .chip').forEach(c=>{ c.classList.toggle('on',c.dataset.o===r.originCode); });
+      populateDestDropdown();
+      state.sel=k;
+      render();
+      select(k,false,true); // quiet 避免 select() 清掉预览标记
+      const sel=document.getElementById('ssSelect'); if(sel) sel.value=k;
+      map.flyTo([r.lat,r.lng],4,{duration:.8});
+      pickPreview=true;
+    };
   });
+}
+// 点击页面空白处，从推荐位预览状态恢复到用户主动选择的原始出发地/目的地
+function restoreUserBaseState(){
+  if(!pickPreview) return;
+  pickPreview=false;
+  state.origins=new Set(userBaseState.origins);
+  state.sel=userBaseState.sel;
+  // 同步 sticky 出发地选择器
+  const oSel=document.getElementById('ssOriginSelect');
+  if(oSel){
+    if(state.origins.size>1 && Array.from(state.origins).every(c=>DATA.gbaCodes.includes(c))) oSel.value='__GBA__';
+    else if(state.origins.size===1) oSel.value=Array.from(state.origins)[0];
+    else oSel.value='';
+  }
+  // 同步出发地 chip
+  document.querySelectorAll('#origins .chip').forEach(c=>{ c.classList.toggle('on',state.origins.has(c.dataset.o)); });
+  populateDestDropdown();
+  render();
+  if(state.sel&&byKey[state.sel]) select(state.sel,false,true);
+  else syncSticky(null);
 }
 function setActiveTab(tier){
   document.querySelectorAll('.tab').forEach(t=>{
@@ -1519,7 +1596,13 @@ const originCities=DATA.origins.map(o=>({code:o.code, city:o.city}));
 document.getElementById('origins').innerHTML='<span style="font-size:11px;color:var(--tx3);align-self:center">出发地</span>'+originCities.map(o=>'<div class="chip" data-o="'+o.code+'"'+(DATA.gbaCodes.includes(o.code)?' data-gba="1"':'')+'>'+o.city+'</div>').join('');
 document.querySelectorAll('#origins .chip').forEach(c=>{
   if(c.dataset.gba==='1') c.classList.add('on');
-  c.onclick=()=>{ const o=c.dataset.o; state.origins=new Set([o]); document.querySelectorAll('#origins .chip').forEach(x=>{ if(x!==c) x.classList.remove('on'); }); c.classList.add('on'); render(); };
+  c.onclick=(e)=>{
+    e.stopPropagation();
+    pickPreview=false;
+    const o=c.dataset.o; state.origins=new Set([o]); document.querySelectorAll('#origins .chip').forEach(x=>{ if(x!==c) x.classList.remove('on'); }); c.classList.add('on');
+    saveUserBaseState();
+    populateDestDropdown(); renderPicks(); render();
+  };
 });
 const regions=[...new Set(DATA.routes.map(r=>r.region))];
 document.getElementById('regions').innerHTML='<span style="font-size:11px;color:var(--tx3);align-self:center">区域</span>'+regions.map(r=>'<div class="chip" data-r="'+r+'">'+REGION_NAME[r]+' '+DATA.routes.filter(x=>x.region===r).length+'</div>').join('');
