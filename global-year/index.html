@@ -809,6 +809,10 @@ input[type=text]{flex:1}
 .wsrc a{color:var(--blue);text-decoration:none;font-size:11.5px;display:block;margin:3px 0;word-break:break-all}
 .wsrc a:hover{text-decoration:underline}.wsrc .sdesc{color:var(--tx3);font-size:10.5px}
 .wtag{font-size:9.5px;padding:0 5px;border-radius:3px;background:#eef0f3;color:var(--tx3);margin-left:4px}
+.flight-source{margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.flight-source>b{font-size:12.5px;display:block;margin-bottom:8px;color:var(--tx)}
+.flight-source .fs-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.flight-source .fs-desc{font-size:11px;color:var(--tx3);line-height:1.75}
 /* koyo */
 .koyogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
 .kcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;position:relative;overflow:hidden;transition:.13s}
@@ -953,14 +957,9 @@ input[type=text]{flex:1}
         <span class="pill">出发地 <b>广州 / 佛山 / 深圳 / 珠海 / 中国香港 / 北京 / 上海 / 杭州 / 成都 / 长沙</b></span>
         <span class="pill">出行窗口 <b>2026-07-31 ~ 2027-07-31</b></span>
         <span class="pill">行程时长 <b>5 ~ 20 天</b></span>
-        <span class="pill warn">按区域偏好：国内/东亚/东南亚 <b>5~9 天</b>，美洲/欧洲/大洋洲/非洲/南亚/中亚/中东 <b>12~20 天</b></span>
-        <span class="pill warn">⚠ 航班号/航司因 Trip.com 反爬（whaleguard）临时受限，价格为实时低价日历数据，已按区域偏好筛选行程天数（短程 5~9 / 长程 12~20）</span>
         <span class="pill">数据更新 <b>2026-08-03 21:57</b></span>
         <span class="pill">命中航线 <b id="statAll">-</b></span>
         <span id="tierStats" style="display:contents"></span>
-        <span class="pill warn">已剔除春秋/九元等国内廉价航空</span>
-        <span class="pill warn">中国香港出发仅国际航线</span>
-        <span class="pill warn">国内航线须直飞（≥3000km 方可中转）</span>
       </div>
     </div>
     <nav class="modnav">
@@ -1109,13 +1108,27 @@ input[type=text]{flex:1}
     </div>
   </section>
 
+  <div class="flight-source">
+    <b>📚 机票数据来源与规则</b>
+    <div class="fs-row">
+      <span class="pill warn">已剔除春秋/九元等国内廉价航空</span>
+      <span class="pill warn">中国香港出发仅国际航线</span>
+      <span class="pill warn">国内航线须直飞（≥3000km 方可中转）</span>
+      <span class="pill warn">按区域偏好：国内/东亚/东南亚 5~9 天，美洲/欧洲/大洋洲/非洲/南亚/中亚/中东 12~20 天</span>
+      <span class="pill warn">⚠ 航班号/航司因 Trip.com 反爬（whaleguard）临时受限，价格为实时低价日历数据，已按区域偏好筛选行程天数（短程 5~9 / 长程 12~20）</span>
+    </div>
+    <div class="fs-desc">
+      数据源：Trip.com 公开航班查询接口，价格为 1 名成人经济舱往返含税总价（人民币），实时波动，以最终下单页为准。<br>
+      已排除的国内低成本航空：春秋航空、九元航空、西部航空、中国联合航空、祥鹏航空、瑞丽航空、长龙航空、乌鲁木齐航空、多彩贵州航空。折扣幅度＝该航线所选最低价相对窗口期内往返价格中位数的降幅。<br>
+      航线规则：中国香港出发只查国际航线；国际航线允许中转，国内航线要求直飞，仅当出发地与目的地直线距离 ≥ 3000km 时才纳入中转方案；所有中转方案均以橙色「⇄ 含中转」标注并注明中转城市。
+      <br>行程偏好：按目的地所在区域偏好不同行程时长 —— 短程区域（国内 / 东亚 / 东南亚）默认输出 5~9 天；长程区域（美洲 / 大洋洲 / 欧洲 / 非洲 / 南亚 / 中亚 / 中东）默认输出 12~20 天往返。每条航线最终显示的「行程 X 天」即该航线最低价机票对应的实际往返天数。
+    </div>
+  </div>
+
   <div class="foot">
-    数据源：Trip.com 公开航班查询接口，价格为 1 名成人经济舱往返含税总价（人民币），实时波动，以最终下单页为准。<br>
-    已排除的国内低成本航空：春秋航空、九元航空、西部航空、中国联合航空、祥鹏航空、瑞丽航空、长龙航空、乌鲁木齐航空、多彩贵州航空。折扣幅度＝该航线所选最低价相对窗口期内往返价格中位数的降幅。<br>
-    航线规则：中国香港出发只查国际航线；国际航线允许中转，国内航线要求直飞，仅当出发地与目的地直线距离 ≥ 3000km 时才纳入中转方案；所有中转方案均以橙色「⇄ 含中转」标注并注明中转城市。
-    <br>行程偏好：按目的地所在区域偏好不同行程时长 —— 短程区域（国内 / 东亚 / 东南亚）默认输出 5~9 天；长程区域（美洲 / 大洋洲 / 欧洲 / 非洲 / 南亚 / 中亚 / 中东）默认输出 12~20 天往返。每条航线最终显示的「行程 X 天」即该航线最低价机票对应的实际往返天数。
-    <br>天气：Open-Meteo 逐日数值预报与近 5 年同期 ERA5 气候常态推算，累计降雨量为出行窗口内每日降水之和。
+    天气：Open-Meteo 逐日数值预报与近 5 年同期 ERA5 气候常态推算，累计降雨量为出行窗口内每日降水之和。<br>
     
+    本页由脚本自动生成，数据仅供参考。
   </div>
 </div>
 
