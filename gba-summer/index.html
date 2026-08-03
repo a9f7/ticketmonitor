@@ -1314,8 +1314,33 @@ function buildHotelUrl(h, route){
 }
 
 /* ---------- 地图 ---------- */
+// 可靠瓦片层：主源用高德生产 HTTPS 节点（wprd），比旧 webrd 节点更稳定；加载失败时自动降级到 OSM。
+function makeReliableTileLayer(map){
+  const primary='https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}';
+  const fallback='https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const layer=L.tileLayer(primary,{
+    subdomains:['1','2','3','4'], maxZoom:18, minZoom:1,
+    attribution:'&copy; 高德地图 / OSM', crossOrigin:false, detectRetina:false
+  });
+  layer.on('tileerror',function(e){
+    const img=e.tile; if(!img || img._fallbackDone || !img.src) return;
+    let z,x,y;
+    try{
+      const u=new URL(img.src);
+      z=u.searchParams.get('z'); x=u.searchParams.get('x'); y=u.searchParams.get('y');
+      if(!z || !x || !y){
+        const parts=u.pathname.split('/').filter(Boolean);
+        if(parts.length>=3){ z=parts[parts.length-3]; x=parts[parts.length-2]; y=parts[parts.length-1].replace('.png',''); }
+      }
+    }catch(_){ return; }
+    if(!z || !x || !y) return;
+    img._fallbackDone=true;
+    img.src=fallback.replace('{z}',z).replace('{x}',x).replace('{y}',y);
+  });
+  return layer.addTo(map);
+}
 const map=L.map('map',{zoomControl:true,worldCopyJump:true,minZoom:2}).setView([20,108],3);
-L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:16,attribution:'&copy; 高德地图'}).addTo(map);
+makeReliableTileLayer(map);
 ORIGINS.forEach(o=>{ L.circleMarker([o.lat,o.lng],{radius:7,color:'#fff',weight:2,fillColor:'#2563d9',fillOpacity:1}).addTo(map).bindTooltip(o.city+' '+o.code+' · 出发地',{permanent:false}); });
 const layer=L.layerGroup().addTo(map);
 const lineLayer=L.layerGroup().addTo(map);
@@ -1505,7 +1530,7 @@ setTimeout(()=>map.invalidateSize(),300);
 /* ---------- 酒店推荐模块 ---------- */
 // 双瓦片源：默认高德（境内清晰）+ 标准英文（OSM/CartoDB 海外覆盖），用户可手动切换
 const HOTEL_TILES = {
-  gaode: { url:'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', sub:['1','2','3','4'], max:16, label:'高德地图', attr:'&copy; 高德地图' },
+  gaode: { url:'https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', sub:['1','2','3','4'], max:18, label:'高德地图', attr:'&copy; 高德地图' },
   osm:   { url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                                 sub:['a','b','c'],     max:19, label:'标准英文', attr:'&copy; OpenStreetMap' },
 };
 let hotelTileBase = 'gaode';
@@ -1515,7 +1540,23 @@ function setHotelTiles(base){
   if(window._hotelTileLayer){ hotelMap.removeLayer(window._hotelTileLayer); window._hotelTileLayer=null; }
   hotelTileBase = base;
   const opt = HOTEL_TILES[base];
-  window._hotelTileLayer = L.tileLayer(opt.url,{subdomains:opt.sub,maxZoom:opt.max,attribution:opt.attr}).addTo(hotelMap);
+  const fallback = HOTEL_TILES[base==='gaode'?'osm':'gaode'].url;
+  window._hotelTileLayer = L.tileLayer(opt.url,{subdomains:opt.sub,maxZoom:opt.max,attribution:opt.attr,crossOrigin:false,detectRetina:false}).addTo(hotelMap);
+  window._hotelTileLayer.on('tileerror',function(e){
+    const img=e.tile; if(!img || img._hotelFbDone || !img.src) return;
+    let z,x,y;
+    try{
+      const u=new URL(img.src);
+      z=u.searchParams.get('z'); x=u.searchParams.get('x'); y=u.searchParams.get('y');
+      if(!z || !x || !y){
+        const parts=u.pathname.split('/').filter(Boolean);
+        if(parts.length>=3){ z=parts[parts.length-3]; x=parts[parts.length-2]; y=parts[parts.length-1].replace('.png',''); }
+      }
+    }catch(_){ return; }
+    if(!z || !x || !y) return;
+    img._hotelFbDone=true;
+    img.src=fallback.replace('{z}',z).replace('{x}',x).replace('{y}',y);
+  });
   document.querySelectorAll('input[name="hotelTile"]').forEach(r=>{ r.checked = (r.value===base); });
 }
 function initHotel(){
@@ -1856,7 +1897,7 @@ if(WEATHER && WEATHER.trips && WEATHER.trips.length){
     document.getElementById('wtabs').appendChild(el); });
   document.querySelectorAll('.wtab').forEach(t=>t.onclick=()=>{ wState.grade=t.dataset.wg; setActiveWTab(wState.grade); renderWList(); });
   const wmap=L.map('wmap',{zoomControl:true,worldCopyJump:true,minZoom:1}).setView([20,108],3);
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:16,attribution:'&copy; 高德地图'}).addTo(wmap);
+  makeReliableTileLayer(wmap);
   ORIGINS.forEach(o=>{ L.circleMarker([o.lat,o.lng],{radius:6,color:'#fff',weight:2,fillColor:'#2563d9',fillOpacity:1}).addTo(wmap).bindTooltip(o.city+' '+o.code+' · 出发地',{permanent:false}); });
   const wLayer=L.layerGroup().addTo(wmap);
   const wMarkers={};
