@@ -1420,43 +1420,29 @@ function makeReliableTileLayer(map){
     const s=src.sub[Math.abs((coords.x+coords.y+coords.z)%src.sub.length)];
     return src.u.replace('{s}',s).replace('{x}',coords.x).replace('{y}',coords.y).replace('{z}',coords.z);
   }
-  const ReliableLayer=L.GridLayer.extend({
-    initialize:function(sources, options){
-      this._sources=sources;
-      L.GridLayer.prototype.initialize.call(this, options);
-    },
-    createTile:function(coords, done){
-      const tile=document.createElement('img');
-      tile.alt=''; tile.setAttribute('role','presentation');
-      tile.style.width='100%'; tile.style.height='100%';
-      tile._done=false;
-      const finish=(err)=>{ if(tile._done) return; tile._done=true; clearTimeout(tile._to); done(err, tile); };
-      L.DomEvent.on(tile,'load',()=>finish(null));
-      L.DomEvent.on(tile,'error',()=>{
-        if(tile._done) return;
-        this._nextSource(tile, coords, (tile._idx||0)+1, done);
-      });
-      this._nextSource(tile, coords, 0, done);
-      return tile;
-    },
-    _nextSource:function(tile, coords, idx, done){
-      if(idx>=this._sources.length){
-        if(!tile._done){ tile._done=true; clearTimeout(tile._to); done('all tile sources failed', tile); }
-        return;
-      }
-      tile._idx=idx;
-      tile.src=tileUrl(this._sources[idx], coords);
-      clearTimeout(tile._to);
-      tile._to=setTimeout(()=>{
-        if(tile._done) return;
-        if(!tile.complete || tile.naturalWidth===0) this._nextSource(tile, coords, idx+1, done);
-      }, 2200);
-    }
-  });
-  return new ReliableLayer(sources, {
-    maxZoom:18, minZoom:1,
+  const layer=L.tileLayer(sources[0].u, {
+    subdomains:sources[0].sub, maxZoom:18, minZoom:1,
     attribution:sources.map(s=>s.a).filter((v,i,a)=>a.indexOf(v)===i).join(' / '),
-  }).addTo(map);
+    crossOrigin:false, detectRetina:false
+  });
+  function tryNext(tile, coords){
+    let idx=tile._relIdx||0;
+    if(idx>=sources.length-1) return;
+    idx++; tile._relIdx=idx;
+    tile.src=tileUrl(sources[idx], coords);
+    startTimer(tile, coords);
+  }
+  function startTimer(tile, coords){
+    clearTimeout(tile._relTo);
+    tile._relTo=setTimeout(()=>{
+      if(tile.complete && tile.naturalWidth>0) return;
+      tryNext(tile, coords);
+    }, 2200);
+  }
+  layer.on('tileloadstart', function(e){ if(e.tile){ e.tile._relIdx=0; startTimer(e.tile, e.coords); } });
+  layer.on('tileload',       function(e){ if(e.tile) clearTimeout(e.tile._relTo); });
+  layer.on('tileerror',      function(e){ if(e.tile){ clearTimeout(e.tile._relTo); tryNext(e.tile, e.coords); } });
+  return layer.addTo(map);
 }
 const map=L.map('map',{zoomControl:true,worldCopyJump:true,minZoom:2}).setView([20,108],3);
 makeReliableTileLayer(map);
