@@ -1383,14 +1383,19 @@ function makeReliableTileLayer(map){
     {u:'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png', sub:['a','b','c'], a:'OSM'},
     {u:'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', sub:['a','b','c'], a:'OSM FR'}
   ];
-  const ReliableLayer=L.TileLayer.extend({
+  function tileUrl(src, coords){
+    const s=src.sub[Math.abs((coords.x+coords.y+coords.z)%src.sub.length)];
+    return src.u.replace('{s}',s).replace('{x}',coords.x).replace('{y}',coords.y).replace('{z}',coords.z);
+  }
+  const ReliableLayer=L.GridLayer.extend({
     initialize:function(sources, options){
       this._sources=sources;
-      L.TileLayer.prototype.initialize.call(this, sources[0].u, Object.assign({}, options, {subdomains:sources[0].sub}));
+      L.GridLayer.prototype.initialize.call(this, options);
     },
     createTile:function(coords, done){
       const tile=document.createElement('img');
       tile.alt=''; tile.setAttribute('role','presentation');
+      tile.style.width='100%'; tile.style.height='100%';
       tile._done=false;
       const finish=(err)=>{ if(tile._done) return; tile._done=true; clearTimeout(tile._to); done(err, tile); };
       L.DomEvent.on(tile,'load',()=>finish(null));
@@ -1407,10 +1412,7 @@ function makeReliableTileLayer(map){
         return;
       }
       tile._idx=idx;
-      const src=this._sources[idx];
-      this._url=src.u; this.options.subdomains=src.sub;
-      const url=this.getTileUrl(coords);
-      tile.src=url;
+      tile.src=tileUrl(this._sources[idx], coords);
       clearTimeout(tile._to);
       tile._to=setTimeout(()=>{
         if(tile._done) return;
@@ -1421,7 +1423,6 @@ function makeReliableTileLayer(map){
   return new ReliableLayer(sources, {
     maxZoom:18, minZoom:1,
     attribution:sources.map(s=>s.a).filter((v,i,a)=>a.indexOf(v)===i).join(' / '),
-    crossOrigin:false, detectRetina:false
   }).addTo(map);
 }
 const map=L.map('map',{zoomControl:true,worldCopyJump:true,minZoom:2}).setView([20,108],3);
