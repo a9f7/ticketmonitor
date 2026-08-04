@@ -1408,11 +1408,11 @@ function buildHotelUrl(h, route){
 }
 
 /* ---------- 地图 ---------- */
-// 可靠瓦片层：多源链式降级 + 超时兜底。主源高德 style=8，异常或 2.2s 未加载则换 style=7/OSM DE/OSM FR。
+// 可靠瓦片层：多源链式降级 + 超时兜底。主源高德标准地图 style=7（内容完整，国内可达），异常或 2.2s 未加载则换 style=8/OSM DE/OSM FR。
 function makeReliableTileLayer(map){
   const sources=[
-    {u:'https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', sub:['1','2','3','4'], a:'高德地图'},
     {u:'https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}', sub:['1','2','3','4'], a:'高德地图'},
+    {u:'https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', sub:['1','2','3','4'], a:'高德地图'},
     {u:'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png', sub:['a','b','c'], a:'OSM'},
     {u:'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', sub:['a','b','c'], a:'OSM FR'}
   ];
