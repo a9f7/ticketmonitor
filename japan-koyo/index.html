@@ -1212,23 +1212,42 @@ let pickPreview=false; // 是否因点击推荐位进入临时预览状态
 function tripDays(a,b){return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000);}
 function saveUserBaseState(){ userBaseState={origins:new Set(state.origins),sel:state.sel}; }
 function wgradeScore(r){ const g=r.weather&&r.weather.grade; if(g==='dry')return 3; if(g==='mild')return 2; if(g==='wet')return 1; return 0; }
-// 按当前出发地集合动态计算各档推荐：价格优先，价差≤15%时天气好的优先
+// 按当前出发地集合动态计算推荐位：
+// 1) 优先从每个档位各取 1 条最便宜的航线（按目的地去重）；
+// 2) 若不足 5 条，再从全部航线中按低价优先补齐到 5 条（仍按目的地去重）。
 function computePicksForOrigins(originsSet){
-  const res={};
+  const routeSort=(a,b)=>{
+    const priceDiff=a.minPrice-b.minPrice;
+    const threshold=Math.max(a.minPrice,b.minPrice)*0.15;
+    if(Math.abs(priceDiff)>threshold) return priceDiff;
+    const ws=wgradeScore(b)-wgradeScore(a);
+    if(ws!==0) return ws;
+    return priceDiff;
+  };
+  const picks=[];
+  const pickedCodes=new Set();
+
+  // 第 1 步：每档 1 条
   TIER_KEYS.forEach(t=>{
-    const list=DATA.routes.filter(r=>r.tier===t && originsSet.has(r.originCode));
-    if(!list.length){ res[t]=null; return; }
-    list.sort((a,b)=>{
-      const priceDiff=a.minPrice-b.minPrice;
-      const threshold=Math.max(a.minPrice,b.minPrice)*0.15;
-      if(Math.abs(priceDiff)>threshold) return priceDiff;
-      const ws=wgradeScore(b)-wgradeScore(a);
-      if(ws!==0) return ws;
-      return priceDiff;
-    });
-    res[t]={cheapest:list[0].key};
+    const list=DATA.routes.filter(r=>r.tier===t && originsSet.has(r.originCode) && !pickedCodes.has(r.code));
+    if(!list.length) return;
+    list.sort(routeSort);
+    const r=list[0];
+    picks.push({tier:t, key:r.key, reason:'该档最低价'});
+    pickedCodes.add(r.code);
   });
-  return res;
+
+  // 第 2 步：不足 5 条时，从全部航线补齐
+  if(picks.length<5){
+    const all=DATA.routes.filter(r=>originsSet.has(r.originCode) && !pickedCodes.has(r.code));
+    all.sort(routeSort);
+    for(const r of all){
+      if(picks.length>=5) break;
+      picks.push({tier:r.tier, key:r.key, reason:'低价优选'});
+      pickedCodes.add(r.code);
+    }
+  }
+  return picks;
 }
 const byKey={}; DATA.routes.forEach(r=>byKey[r.key]=r);
 const code2key={}; DATA.routes.forEach(r=>{ if(!code2key[r.code]) code2key[r.code]=r.key; });
@@ -1586,7 +1605,7 @@ function select(key,fromMap,quiet){
     if(r && typeof wSelect==='function' && DATA.weather && DATA.weather.trips && DATA.weather.trips.length && typeof wTrips!=='undefined' && wTrips[r.code]) wSelect(r.code, false, true);
   } finally { _inSelect=false; }
 }
-function pickCard(tier,key){
+function pickCard(tier,key,reason){
   const r=byKey[key]; if(!r) return '';
   const o=r.options[0];
   const C=TIER_COLOR[tier];
@@ -1595,7 +1614,7 @@ function pickCard(tier,key){
   const _k = (DATA.moduleId==='japan-koyo' && DATA.koyo && DATA.koyo.cities) ? (DATA.koyo.cities.find(c=>c.code===r.code)||null) : null;
   const kBadge = _k ? '<div class="pick-w" style="margin-top:3px"><span style="background:'+_k.color+';color:#fff;padding:1px 6px;border-radius:3px;font-weight:600;font-size:9px">🍁 '+_k.label+'</span><span style="background:#fff7e0;color:#8a5b12;padding:1px 6px;border-radius:3px;font-weight:600;font-size:9px;margin-left:3px">观赏 '+_k.winStart.slice(5)+'~'+_k.winEnd.slice(5)+'</span></div>' : '';
   return '<div class="pick" data-key="'+key+'" style="border-left:3px solid '+C.dot+'">'+
-    '<div class="pick-hd"><span class="tag" style="background:'+C.bg+';color:'+C.txt+'">'+TIER_LABEL[tier]+'</span>该档最低价</div>'+
+    '<div class="pick-hd"><span class="tag" style="background:'+C.bg+';color:'+C.txt+'">'+TIER_LABEL[tier]+'</span>'+(reason||'该档最低价')+'</div>'+
     '<div class="pick-city">'+r.city+'<span>'+r.code+'</span></div>'+
     '<div class="pick-price">¥'+r.minPrice+'<small>/人往返</small></div>'+
     '<div class="pick-sub">'+r.originCity+' · '+o.depDate.slice(5)+'去'+o.retDate.slice(5)+'回 '+tripDays(o.depDate,o.retDate)+'天 · '
@@ -1607,8 +1626,7 @@ function pickCard(tier,key){
 }
 function renderPicks(){
   const picks=computePicksForOrigins(state.origins);
-  let h='';
-  TIER_KEYS.forEach(t=>{ const key=picks[t]&&picks[t].cheapest; if(!key) return; h+=pickCard(t,key); });
+  let h=picks.map(p=>pickCard(p.tier,p.key,p.reason)).join('');
   if(!h) h='<div class="empty">当前出发地暂无命中航线</div>';
   document.getElementById('picks').innerHTML=h;
   document.querySelectorAll('.pick').forEach(el=>{
