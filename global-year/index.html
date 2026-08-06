@@ -1186,9 +1186,10 @@ let pickPreview=false; // 是否因点击推荐位进入临时预览状态
 function tripDays(a,b){return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000);}
 function saveUserBaseState(){ userBaseState={origins:new Set(state.origins),sel:state.sel}; }
 function wgradeScore(r){ const g=r.weather&&r.weather.grade; if(g==='dry')return 3; if(g==='mild')return 2; if(g==='wet')return 1; return 0; }
-// 按当前出发地集合动态计算推荐位：
-// 1) 优先从每个档位各取 1 条最便宜的航线（按目的地去重）；
-// 2) 若不足 5 条，再从全部航线中按低价优先补齐到 5 条（仍按目的地去重）。
+// 按当前出发地集合 + 价格档位动态计算推荐位：
+// - 未选价格档位（all）：每档 1 条最低价；不足 5 条再从全部航线补齐到 5 条。
+// - 选定价格档位：只在该档位内推荐最多 5 条航线（按目的地去重）。
+// - originsSet 为空时：出发地不限；有出发地时：只从已选出发地筛选。
 function computePicksForOrigins(originsSet){
   const routeSort=(a,b)=>{
     const priceDiff=a.minPrice-b.minPrice;
@@ -1198,26 +1199,38 @@ function computePicksForOrigins(originsSet){
     if(ws!==0) return ws;
     return priceDiff;
   };
+  const inOrigin = r => originsSet.size===0 || originsSet.has(r.originCode);
   const picks=[];
   const pickedCodes=new Set();
+  const tier = state.tier || 'all';
 
-  // 第 1 步：每档 1 条
-  TIER_KEYS.forEach(t=>{
-    const list=DATA.routes.filter(r=>r.tier===t && originsSet.has(r.originCode) && !pickedCodes.has(r.code));
-    if(!list.length) return;
+  if(tier==='all'){
+    // 第 1 步：每档 1 条
+    TIER_KEYS.forEach(t=>{
+      const list=DATA.routes.filter(r=>r.tier===t && inOrigin(r) && !pickedCodes.has(r.code));
+      if(!list.length) return;
+      list.sort(routeSort);
+      const r=list[0];
+      picks.push({tier:t, key:r.key, reason:'该档最低价'});
+      pickedCodes.add(r.code);
+    });
+    // 第 2 步：不足 5 条时，从全部航线补齐
+    if(picks.length<5){
+      const all=DATA.routes.filter(r=>inOrigin(r) && !pickedCodes.has(r.code));
+      all.sort(routeSort);
+      for(const r of all){
+        if(picks.length>=5) break;
+        picks.push({tier:r.tier, key:r.key, reason:'低价优选'});
+        pickedCodes.add(r.code);
+      }
+    }
+  } else {
+    // 已选定档位：只从该档位推荐最多 5 条
+    const list=DATA.routes.filter(r=>r.tier===tier && inOrigin(r) && !pickedCodes.has(r.code));
     list.sort(routeSort);
-    const r=list[0];
-    picks.push({tier:t, key:r.key, reason:'该档最低价'});
-    pickedCodes.add(r.code);
-  });
-
-  // 第 2 步：不足 5 条时，从全部航线补齐
-  if(picks.length<5){
-    const all=DATA.routes.filter(r=>originsSet.has(r.originCode) && !pickedCodes.has(r.code));
-    all.sort(routeSort);
-    for(const r of all){
+    for(const r of list){
       if(picks.length>=5) break;
-      picks.push({tier:r.tier, key:r.key, reason:'低价优选'});
+      picks.push({tier:tier, key:r.key, reason:'该档最低价'});
       pickedCodes.add(r.code);
     }
   }
@@ -1687,7 +1700,7 @@ function setActiveTab(tier){
   });
 }
 TIER_KEYS.forEach(t=>{ const el=document.createElement('div'); el.className='tab'; el.dataset.tier=t; el.textContent=TIER_LABEL[t]; document.getElementById('tabs').appendChild(el); });
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ state.tier=t.dataset.tier; setActiveTab(state.tier); render(); });
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ state.tier=t.dataset.tier; setActiveTab(state.tier); renderPicks(); render(); });
 document.getElementById('sort').onchange=e=>{state.sort=e.target.value;render();};
 document.getElementById('q').oninput=e=>{state.q=e.target.value.trim();render();};
 // 固定渲染全部出发地（GBA 5 城 + 新增 5 城），即使某城市当前模块暂无命中航线，也始终可选，切换后列表为空即提示无票
