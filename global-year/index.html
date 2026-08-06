@@ -1518,25 +1518,26 @@ function transitBadge(o,cls){
   if(o.back&&o.back.stops) parts.push('回程 '+o.back.stops+' 次');
   return '<span class="badge tr'+(cls||'')+'">⇄ 含中转'+(parts.length?' · '+parts.join(' · '):'')+'</span>';
 }
-// ---------- 机票预订跳转链接（携程 / 天巡）----------
+// ---------- 机票预订跳转链接（携程国内 / 天巡国内）----------
 // 直接深链到「出发地 → 目的地 / 指定往返日期」的航线搜索页，点击即在新标签打开对应查票结果。
-// 说明：源站（trip.com / skyscanner）对脚本化请求有反爬（curl 探测返回 432 / 验证码），
-// 但真实浏览器点击会正常打开搜索结果，故这里采用双方官方深链格式。
+// 经验复用酒店板块：默认走国内站点（携程 flights.ctrip.com / 天巡 tianxun.com），
+// 比原 trip.com / skyscanner.com 国际站在国内更稳、更易打开。
+// 说明：源站对脚本化请求有反爬（无头请求会触发验证码），但真实浏览器点击可正常打开，故采用官方深链格式。
 function tripFlightUrl(r){
-  const o=r.options && r.options[0]; if(!o) return 'https://www.trip.com/flights/';
-  const u=new URL('https://www.trip.com/flights/booking/'+r.originCode+'-'+r.code+'/');
-  u.searchParams.set('departDate', o.depDate);
-  u.searchParams.set('returnDate', o.retDate);
-  u.searchParams.set('numOfAdults','1');
-  u.searchParams.set('cabinClass','Economy');
-  u.searchParams.set('currency','CNY');
-  u.searchParams.set('searchType','roundtrip');
+  const o=r.options && r.options[0]; if(!o) return 'https://flights.ctrip.com/';
+  const u=new URL('https://flights.ctrip.com/online/list/round-'+r.originCode+'-'+r.code+'/');
+  u.searchParams.set('depdate', o.depDate);
+  u.searchParams.set('arrdate', o.retDate);
+  u.searchParams.set('cabin', 'y_s_c_f');
+  u.searchParams.set('adult', '1');
+  u.searchParams.set('child', '0');
+  u.searchParams.set('infant', '0');
   return u.toString();
 }
 function skyFlightUrl(r){
-  const o=r.options && r.options[0]; if(!o) return 'https://www.skyscanner.com/transport/flights/';
+  const o=r.options && r.options[0]; if(!o) return 'https://www.tianxun.com/transport/flights/';
   const from=r.originCode.toLowerCase(), to=r.code.toLowerCase();
-  const u=new URL('https://www.skyscanner.com/transport/flights/'+from+'/'+to+'/'+o.depDate+'/'+o.retDate+'/');
+  const u=new URL('https://www.tianxun.com/transport/flights/'+from+'/'+to+'/'+o.depDate+'/'+o.retDate+'/');
   u.searchParams.set('adultsv2','1');
   u.searchParams.set('cabinclass','economy');
   u.searchParams.set('rtn','1');
@@ -1548,7 +1549,7 @@ function flightLinks(r){
   const trip=tripFlightUrl(r), sky=skyFlightUrl(r);
   return '<div class="fly-btns">'+
     '<a class="fly-trip" href="'+trip+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在携程查看 '+r.originCity+'→'+r.city+' 该行程查票">✈️ 携程查票</a>'+
-    '<a class="fly-sky"  href="'+sky+'"  target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在天巡(Skyscanner)查看 '+r.originCity+'→'+r.city+' 该行程查票">🌐 天巡查票</a>'+
+    '<a class="fly-sky"  href="'+sky+'"  target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在天巡网(国内)查看 '+r.originCity+'→'+r.city+' 该行程查票">🌐 天巡查票</a>'+
   '</div>';
 }
 function itemHTML(r){
