@@ -1533,14 +1533,25 @@ function tripFlightUrl(r){
   u.searchParams.set('infant', '0');
   return u.toString();
 }
+// 天巡（Skyscanner 中国站）机票搜索结果深链：经实测，正确格式为
+//   /transport/flights/{出发}/{到达}/{YYMMDD}/{YYMMDD}/?adultsv2=1&cabinclass=economy&childrenv2=&ref=home&rtn=1&...
+// 城市码为 IATA 小写（服务端识别，真实浏览器可正常打开结果页）；日期必须是 6 位 YYMMDD。
+// 个别城市天巡码与 IATA 不同（如东京 TYO→tyoa），用 TIANXUN_CODE 覆盖（实测 tyo 也认，但 tyoa 与官网一致）。
+const TIANXUN_CODE = { TYO: 'tyoa' };
+function tianxunCode(iata){ return (TIANXUN_CODE[iata] || iata).toLowerCase(); }
 function skyFlightUrl(r){
-  const o=r.options && r.options[0]; if(!o) return 'https://www.tianxun.com/flights/';
-  // 天巡（Skyscanner 中国）的 SPA 对 /transport/flights/{from}{to}/{dep}/{ret}/ 这类直接结果深链
-  // 在真实浏览器里会走到客户端 404；服务端能识别但前端路由不认。因此改用天巡机票搜索页的 hash 预填：
-  // 打开 flights 页面，并通过 URL hash 带出发地/目的地/日期，若天巡 SPA 读取 hash 参数则可自动填入搜索框。
-  const from=r.originCode.toLowerCase(), to=r.code.toLowerCase();
-  const u=new URL('https://www.tianxun.com/flights/');
-  u.hash='/?from='+from+'&to='+to+'&outbound='+o.depDate+'&inbound='+o.retDate+'&adults=1&cabinclass=economy&rtn=1';
+  const o=r.options && r.options[0]; if(!o) return 'https://www.tianxun.com/';
+  const from=tianxunCode(r.originCode), to=tianxunCode(r.code);
+  const dep=o.depDate.slice(2).replace(/-/g,''), ret=o.retDate.slice(2).replace(/-/g,'');
+  const u=new URL('https://www.tianxun.com/transport/flights/'+from+'/'+to+'/'+dep+'/'+ret+'/');
+  u.searchParams.set('adultsv2','1');
+  u.searchParams.set('cabinclass','economy');
+  u.searchParams.set('childrenv2','');
+  u.searchParams.set('ref','home');
+  u.searchParams.set('rtn','1');
+  u.searchParams.set('preferdirects','false');
+  u.searchParams.set('outboundaltsenabled','false');
+  u.searchParams.set('inboundaltsenabled','false');
   return u.toString();
 }
 function flightLinks(r){
@@ -1548,7 +1559,7 @@ function flightLinks(r){
   const trip=tripFlightUrl(r), sky=skyFlightUrl(r);
   return '<div class="fly-btns">'+
     '<a class="fly-trip" href="'+trip+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在携程查看 '+r.originCity+'→'+r.city+' 该行程查票">✈️ 携程查票</a>'+
-    '<a class="fly-sky" href="'+sky+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在天巡网(Skyscanner)预填 '+r.originCity+'→'+r.city+' 搜索">🌐 天巡·预填</a>'+
+    '<a class="fly-sky" href="'+sky+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在天巡网查看 '+r.originCity+'→'+r.city+' 该行程查票">🌐 天巡查票</a>'+
   '</div>';
 }
 function itemHTML(r){
