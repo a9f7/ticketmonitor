@@ -702,8 +702,9 @@ h1 small{font-weight:500;font-size:12px;color:var(--tx2);margin-left:8px}
 .fly-btns a{font-size:11px;line-height:1;padding:5px 9px;border-radius:7px;font-weight:600;text-decoration:none;white-space:nowrap;border:1px solid transparent}
 .fly-btns a.fly-trip{background:#2563d9;color:#fff}
 .fly-btns a.fly-trip:hover{background:#1d4ed8}
-.fly-btns a.fly-qunar{background:#fff;border-color:#d8dee8;color:#e02b3c}
-.fly-btns a.fly-qunar:hover{background:#fff5f4;border-color:#f3c2bd}
+.fly-btns a.fly-sky{background:#fff;border-color:#d8dee8;color:#e02b3c}
+.fly-btns a.fly-sky:hover{background:#fff5f4;border-color:#f3c2bd}
+.dark .fly-btns a.fly-sky{background:#1b1f26;border-color:#3a4150;color:#ff6b78}
 .dark .fly-btns a.fly-qunar{background:#1b1f26;border-color:#3a4150;color:#ff6b78}
 .main{display:grid;grid-template-columns:1fr 460px;gap:12px;height:calc(100vh - 40px);min-height:640px}
 @media(max-width:1100px){.main{grid-template-columns:1fr;height:auto}}
@@ -1518,10 +1519,12 @@ function transitBadge(o,cls){
   if(o.back&&o.back.stops) parts.push('回程 '+o.back.stops+' 次');
   return '<span class="badge tr'+(cls||'')+'">⇄ 含中转'+(parts.length?' · '+parts.join(' · '):'')+'</span>';
 }
-// ---------- 机票预订跳转链接（携程 / 去哪儿）----------
+// ---------- 机票预订跳转链接（携程 / 天巡）----------
 // 直接深链到「出发地 → 目的地 / 指定往返日期」的航线搜索页，点击即在新标签打开对应查票结果。
 // 经验复用酒店板块：默认走国内站点，比原 trip.com / skyscanner.com 国际站在国内更稳。
-// 说明：源站对脚本化请求有反爬（无头请求会触发验证码），但真实浏览器点击可正常打开，故采用官方深链格式。
+// 天巡 = Skyscanner 国内镜像，标准往返深链为 transport/flights/{from}/{to}/{去程}/{回程}/（城市码小写）。
+// 已用 curl 实测：该路径被天巡正确识别（重定向回跳中可完整还原），脚本请求才会触发验证码，
+// 真实浏览器点击可正常打开搜索结果页；故采用极简「纯路径、不带额外参数」写法以最大化兼容。
 function tripFlightUrl(r){
   const o=r.options && r.options[0]; if(!o) return 'https://flights.ctrip.com/';
   // 携程国内机票往返的正确格式：depdate=去程日期_回程日期（下划线连接）
@@ -1533,24 +1536,18 @@ function tripFlightUrl(r){
   u.searchParams.set('infant', '0');
   return u.toString();
 }
-function qunarFlightUrl(r){
-  const o=r.options && r.options[0]; if(!o) return 'https://flight.qunar.com/';
-  // 去哪儿往返深链：fromCity/toCity 用中文城市名；isInter=false 国内，true 国际/港澳台
-  const inter = r.isDomestic ? 'false' : 'true';
-  const u=new URL('https://flight.qunar.com/site/interroundtrip_compare.htm');
-  u.searchParams.set('fromCity', r.originCity);
-  u.searchParams.set('toCity', r.city);
-  u.searchParams.set('fromDate', o.depDate);
-  u.searchParams.set('toDate', o.retDate);
-  u.searchParams.set('isInter', inter);
-  return u.toString();
+function skyFlightUrl(r){
+  const o=r.options && r.options[0]; if(!o) return 'https://www.tianxun.com/transport/flights/';
+  // 天巡（Skyscanner 国内镜像）标准往返深链：城市码小写，纯路径不带额外参数
+  const from=r.originCode.toLowerCase(), to=r.code.toLowerCase();
+  return 'https://www.tianxun.com/transport/flights/'+from+'/'+to+'/'+o.depDate+'/'+o.retDate+'/';
 }
 function flightLinks(r){
   if(!r || !r.options || !r.options.length) return '';
-  const trip=tripFlightUrl(r), qunar=qunarFlightUrl(r);
+  const trip=tripFlightUrl(r), sky=skyFlightUrl(r);
   return '<div class="fly-btns">'+
     '<a class="fly-trip" href="'+trip+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在携程查看 '+r.originCity+'→'+r.city+' 该行程查票">✈️ 携程查票</a>'+
-    '<a class="fly-qunar" href="'+qunar+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在去哪儿查看 '+r.originCity+'→'+r.city+' 该行程查票">🐫 去哪儿查票</a>'+
+    '<a class="fly-sky" href="'+sky+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在天巡网查看 '+r.originCity+'→'+r.city+' 该行程查票">🌐 天巡查票</a>'+
   '</div>';
 }
 function itemHTML(r){
