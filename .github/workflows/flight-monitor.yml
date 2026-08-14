@@ -1,0 +1,41 @@
+# 机票监控 - GitHub Actions 云端双保险（备份运行器）
+# 与 CloudStudio 定时任务、本地 WorkBuddy 自动化共同构成三重冗余：
+#   - 抓取 / 构建全在云端完成，输出经 Git Data API 推送到 gh-pages。
+#   - 无需本机保持开机，GitHub 的 runner（美国 IP）仅作备份；
+#     若 Trip.com 被 whaleguard 拦，管线自动降级为日历低价模式，页面照常可用。
+name: Flight Monitor Backup
+
+on:
+  schedule:
+    - cron: '23 */12 * * *'   # 每 12 小时一次（UTC），与本地自动化错峰
+  workflow_dispatch: {}        # 允许在 Actions 页面手动触发
+  push:
+    branches: [master]
+    paths:
+      - 'scripts/**'
+      - 'package.json'
+
+permissions:
+  contents: write   # 允许推送 gh-pages
+
+concurrency:
+  group: flight-monitor
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run pipeline (scrape + weather + build + push gh-pages)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # 自动注入，无需额外 secret
+        run: node scripts/pipeline.js
