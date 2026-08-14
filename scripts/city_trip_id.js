@@ -1,0 +1,155 @@
+// 携程/trip.com 酒店地图 URL 用的 city 数字编号映射表（IATA 城市码 → trip.com 现行 city ID）
+// ⚠️ 重要：携程中文站 hotels.ctrip.com 的 SPA 既不接受 URL 预填（?query=/?city= 都被忽略，只显示空白今日/明日首页），
+//    也不稳定（数字 ID 还会被偷偷改，实测 46=五指山、411=上饶）。因此统一改用「携程国际站 trip.com」：
+//    - trip.com 支持 https://www.trip.com/hotels/list?city={ID}&checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD 同时预填城市+日期
+//    - 且 trip.com 无 X-Frame-Options / CSP frame-ancestors，可直接 iframe 嵌入
+// 编号来源：扫描 trip.com ?city=1..N 的标题，建立「ID→城市名」映射后逐一校正（见 scripts/scan_trip_city_ids.js）
+// 校验：curl -s "https://www.trip.com/hotels/list?city=ID" | grep -o "<title>...</title>"
+// 表外城市兜底：tripMapUrl 跳 https://www.trip.com/hotels/ 首页
+module.exports = {
+  // ===== 中国大陆 d-country=1 =====
+  PEK: { country: 1,   city: 1,    name: '北京' },
+  BJS: { country: 1,   city: 1,    name: '北京' },
+  SHA: { country: 1,   city: 2,    name: '上海' },
+  CAN: { country: 1,   city: 32,   name: '广州' },
+  SZX: { country: 1,   city: 30,   name: '深圳' },
+  HGH: { country: 1,   city: 17,   name: '杭州' },
+  CTU: { country: 1,   city: 28,   name: '成都' },
+  CSX: { country: 1,   city: 206,  name: '长沙' },
+  XIY: { country: 1,   city: 10,    name: '西安' },
+  CKG: { country: 1,   city: 4,    name: '重庆' },
+  WUH: { country: 1,   city: 477,  name: '武汉' },
+  KMG: { country: 1,   city: 34,   name: '昆明' },
+  TAO: { country: 1,   city: 7,   name: '青岛' },
+  DLC: { country: 1,   city: 6,   name: '大连' },
+  SHE: { country: 1,   city: 451,   name: '沈阳' },
+  HRB: { country: 1,   city: 5,   name: '哈尔滨' },
+  CGQ: { country: 1,   city: 158,   name: '长春' },
+  TSN: { country: 1,   city: 3,   name: '天津' },
+  TYN: { country: 1,   city: 105,   name: '太原' },
+  HET: { country: 1,   city: 103,  name: '呼和浩特' },
+  INC: { country: 1,   city: 99,   name: '银川' },
+  LHW: { country: 1,   city: 100,    name: '兰州' },
+  XNN: { country: 1,   city: 124,   name: '西宁' },
+  URC: { country: 1,   city: 39,  name: '乌鲁木齐' },
+  LXA: { country: 1,   city: 41,   name: '拉萨' },
+  SYX: { country: 1,   city: 43,   name: '三亚' },
+  HAK: { country: 1,   city: 42,   name: '海口' },
+  XMN: { country: 1,   city: 25,   name: '厦门' },
+  FOC: { country: 1,   city: 258,   name: '福州' },
+  NKG: { country: 1,   city: 12,   name: '南京' },
+  HFE: { country: 1,   city: 278,  name: '合肥' },
+  KHN: { country: 1,   city: 376,   name: '南昌' },
+  TNA: { country: 1,   city: 144,  name: '济南' },
+  NNG: { country: 1,   city: 380,   name: '南宁' },
+  KWL: { country: 1,   city: 33,   name: '桂林' },
+  LJG: { country: 1,   city: 37,   name: '丽江' },
+  DYG: { country: 1,   city: 27,   name: '张家界' },   // 近似
+  JJN: { country: 1,   city: 406,   name: '泉州' },     // 近似
+  WNZ: { country: 1,   city: 491,  name: '温州' },
+  YNT: { country: 1,   city: 533,  name: '烟台' },
+  KWE: { country: 1,   city: 38,  name: '贵阳' },
+  CGO: { country: 1,   city: 559,   name: '郑州' },
+  FUO: { country: 1,   city: 251,   name: '佛山' },     // 近似广州
+  ZUH: { country: 1,   city: 31,   name: '珠海' },
+  // ===== 中国港澳台 =====
+  HKG: { country: 70,  city: 58,   name: '中国香港' },
+  MFM: { country: 100, city: 59,  name: '中国澳门' },
+  TPE: { country: 14,  city: 617,  name: '中国台北' },
+  // ===== 韩国 d-country=50 =====
+  ICN: { country: 50,  city: 274,  name: '首尔' },
+  PUS: { country: 50,  city: 253,  name: '釜山' },
+  CJU: { country: 50,  city: 737,  name: '济州岛' },
+  // ===== 日本 d-country=14 =====
+  TYO: { country: 14,  city: 228,  name: '东京' },
+  OSA: { country: 14,  city: 219,  name: '大阪' },
+  KYO: { country: 14,  city: 734,  name: '京都' },
+  NGO: { country: 14,  city: 360,  name: '名古屋' },
+  CTS: { country: 14,  city: 641,  name: '札幌' },
+  SPK: { country: 14,  city: 641,  name: '札幌' },
+  FUK: { country: 14,  city: 248,  name: '福冈' },
+  OKA: { country: 14,  city: 207,  name: '冲绳' },
+  KOJ: { country: 14,  city: 735,  name: '鹿儿岛' },
+  HKD: { country: 14,  city: 800,  name: '函馆' },
+  HIJ: { country: 14,  city: 262,  name: '广岛' },
+  SDJ: { country: 14,  city: 585,  name: '仙台' },
+  // ===== 泰国 d-country=30 =====
+  BKK: { country: 30,  city: 359,  name: '曼谷' },
+  HKT: { country: 30,  city: 725,  name: '普吉' },
+  CNX: { country: 30,  city: 623,  name: '清迈' },
+  // ===== 越南 =====
+  HAN: { country: 30,  city: 286,  name: '河内' },
+  SGN: { country: 30,  city: 301,  name: '胡志明市' },
+  CXR: { country: 30,  city: 1777,  name: '芽庄' },
+  PQC: { country: 30,  city: 5649,  name: '富国岛' },
+  // ===== 马来西亚 d-country=33 =====
+  KUL: { country: 33,  city: 315,  name: '吉隆坡' },
+  // ===== 印度尼西亚 =====
+  DPS: { country: 33,  city: 723,  name: '巴厘岛' },
+  // ===== 新加坡 =====
+  SIN: { country: 33,  city: 73,  name: '新加坡' },
+  // ===== 菲律宾 =====
+  MNL: { country: 33,  city: 364,  name: '马尼拉' },
+  // ===== 迪拜/中东 =====
+  DXB: { country: 50,  city: 220,  name: '迪拜' },
+  DOH: { country: 50,  city: 1401,  name: '多哈' },
+  // ===== 大洋洲 =====
+  SYD: { country: 91,  city: 501,  name: '悉尼' },
+  MEL: { country: 91,  city: 358,  name: '墨尔本' },
+  BNE: { country: 91,  city: 680,  name: '布里斯班' },
+  AKL: { country: 91,  city: 678,  name: '奥克兰' },
+  // ===== 欧洲 =====
+  LON: { country: 81,  city: 338,  name: '伦敦' },
+  PAR: { country: 81,  city: 192,  name: '巴黎' },
+  ROM: { country: 81,  city: 343,  name: '罗马' },
+  MIL: { country: 81,  city: 361,  name: '米兰' },
+  MAD: { country: 81,  city: 357,  name: '马德里' },
+  BCN: { country: 81,  city: 40795,  name: '巴塞罗那' },
+  FRA: { country: 81,  city: 250,  name: '法兰克福' },
+  AMS: { country: 81,  city: 176,  name: '阿姆斯特丹' },
+  ZRH: { country: 81,  city: 434,  name: '苏黎世' },
+  VIE: { country: 81,  city: 651,  name: '维也纳' },
+  MOW: { country: 81,  city: 366,  name: '莫斯科' },
+  // ===== 美洲 =====
+  NYC: { country: 91,  city: 633,  name: '纽约' },
+  LAX: { country: 91,  city: 347,  name: '洛杉矶' },
+  SFO: { country: 91,  city: 313,  name: '旧金山' },
+  SEA: { country: 91,  city: 511,  name: '西雅图' },
+  YVR: { country: 91,  city: 476,  name: '温哥华' },
+  YTO: { country: 91,  city: 461,  name: '多伦多' },
+  // ===== 东南亚 / 南亚 / 中亚 / 蒙古（补齐，避免酒店嵌入走移动端 H5） =====
+  CEB: { country: 33,  city: 1239,  name: '宿务' },
+  VTE: { country: 30,  city: 486,   name: '万象' },
+  DAD: { country: 30,  city: 1356,  name: '岘港' },
+  PEN: { country: 33,  city: 35926, name: '槟城' },   // 聚合城市 ID（乔治市）
+  BKI: { country: 33,  city: 1393,  name: '亚庇' },
+  ULN: { country: 30,  city: 483,   name: '乌兰巴托' },
+  DEL: { country: 50,  city: 495,   name: '新德里' },
+  TAS: { country: 30,  city: 639,   name: '塔什干' },
+  RGN: { country: 30,  city: 522,   name: '仰光' },
+  KTM: { country: 30,  city: 304,   name: '加德满都' },
+  ALA: { country: 30,  city: 174,   name: '阿拉木图' },
+  CMB: { country: 30,  city: 810,   name: '科伦坡' },
+  PER: { country: 91,  city: 681,   name: '珀斯' },
+  MLE: { country: 30,  city: 1207,  name: '马累' },
+  IST: { country: 81,  city: 532,   name: '伊斯坦布尔' },
+  AUH: { country: 50,  city: 766,   name: '阿布扎比' },
+  NBO: { country: 81,  city: 825,   name: '内罗毕' },
+  LIS: { country: 81,  city: 1231,  name: '里斯本' },
+  CAI: { country: 81,  city: 332,   name: '开罗' },
+  BUD: { country: 81,  city: 637,   name: '布达佩斯' },
+  ATH: { country: 81,  city: 710,   name: '雅典' },
+  JNB: { country: 81,  city: 684,   name: '约翰内斯堡' },
+  CPH: { country: 81,  city: 260,   name: '哥本哈根' },
+  HEL: { country: 81,  city: 277,   name: '赫尔辛基' },
+  // ===== 日本地方城市（补齐） =====
+  NGS: { country: 14,  city: 205,   name: '长崎' },
+  KMJ: { country: 14,  city: 4009,  name: '熊本' },
+  TAK: { country: 14,  city: 5999,  name: '高松' },
+  KCZ: { country: 14,  city: 1173,  name: '高知' },
+  KMI: { country: 14,  city: 1779,  name: '宫崎' },
+  TOY: { country: 14,  city: 807557,name: '富山' },
+  OKJ: { country: 14,  city: 263,   name: '冈山' },
+  KKJ: { country: 14,  city: 3234,  name: '北九州' },
+  AOJ: { country: 14,  city: 4351,  name: '青森' },
+};
