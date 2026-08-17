@@ -2,6 +2,7 @@
 // 统一驱动 scripts/scrape.js / weather.js / build.js。
 const DESTS = require('./destinations');
 const DESTS_JP = require('./destinations-japan');
+const { activeWindow } = require('./seasons');
 
 // 粤港澳大湾区 5 城出发地（所有模块共用现有框架配置）
 const GBA_ORIGINS = [
@@ -34,32 +35,48 @@ function anchors(start, end, count) {
 }
 
 const MODULES = {
-  // ===== 一、大湾区暑期出游机票监控（既有的标杆模块，行为保持一致） =====
-  'gba-summer': {
-    id: 'gba-summer',
-    name: '大湾区暑期出游机票监控',
-    short: '大湾区暑期',
-    origins: [...GBA_ORIGINS, ...EXTRA_DEPARTURES],
-    destinations: DESTS,
-    window: { start: '2026-07-31', end: '2026-08-20' },
-    tripMin: 5, tripMax: 9,
-    priceCap: 3000,            // >3000 丢弃
-    tiers: [
-      { key: 'T1', cap: 1000, label: '<¥1000' },
-      { key: 'T2', cap: 1500, label: '¥1000-1500' },
-      { key: 'T3', cap: 2000, label: '¥1500-2000' },
-      { key: 'T4', cap: 2500, label: '¥2000-2500' },
-      { key: 'T5', cap: 3000, label: '¥2500-3000' },
-    ],
-    rules: { intlOnlyOrigins: ['HKG'], transitMinKm: 3000 },
-    weather: { mode: 'window', window: { start: '2026-07-31', end: '2026-08-31' } },
-    koyo: false,
-    hotelDomain: 'ctrip',
-    probe: { kind: 'single', dates: ['2026-08-05', '2026-08-12'] },
-    title: '大湾区 5 城出发 · 往返机票监控',
-    sub: '单人往返含税总价 · 经济舱',
-    desc: '广州 / 佛山 / 深圳 / 珠海 / 香港 出发，暑期 7/31–8/20 飞往全国与世界各地的低价往返机票。',
-  },
+  // ===== 一、大湾区寒暑期出游机票监控（长期化：暑期/寒假自动切换，数据跨年同期对比） =====
+  'gba-summer': (() => {
+    // 动态季节窗口：根据当前日期自动选「暑期 7/1–8/31」或「寒假 1/1–3/1（含春节±5天专项）」
+    const aw = activeWindow(new Date());
+    const origins = [...GBA_ORIGINS, ...EXTRA_DEPARTURES];
+    const win = { start: aw.start, end: aw.end };
+    // probe 取窗口内两个锚点（用于详单接口探测）
+    const ws = Date.parse(aw.start + 'T00:00:00Z'), we = Date.parse(aw.end + 'T00:00:00Z');
+    const probeDates = [
+      new Date(ws + (we - ws) * 0.4).toISOString().slice(0, 10),
+      new Date(ws + (we - ws) * 0.75).toISOString().slice(0, 10),
+    ];
+    const springNote = aw.springStart
+      ? `；另含春节专项 ${aw.springStart}～${aw.springEnd}`
+      : '';
+    return {
+      id: 'gba-summer',
+      name: '大湾区寒暑期机票监控',
+      short: '大湾区寒暑期',
+      origins,
+      destinations: DESTS,
+      window: win,
+      tripMin: 5, tripMax: 9,
+      priceCap: 3000,            // >3000 丢弃
+      tiers: [
+        { key: 'T1', cap: 1000, label: '<¥1000' },
+        { key: 'T2', cap: 1500, label: '¥1000-1500' },
+        { key: 'T3', cap: 2000, label: '¥1500-2000' },
+        { key: 'T4', cap: 2500, label: '¥2000-2500' },
+        { key: 'T5', cap: 3000, label: '¥2500-3000' },
+      ],
+      rules: { intlOnlyOrigins: ['HKG'], transitMinKm: 3000 },
+      weather: { mode: 'window', window: win },
+      koyo: false,
+      hotelDomain: 'ctrip',
+      probe: { kind: 'single', dates: probeDates },
+      seasonInfo: aw,
+      title: '大湾区 ' + aw.label + ' · 往返机票监控',
+      sub: '单人往返含税总价 · 经济舱',
+      desc: `大湾区 5 城出发，${aw.label}（${aw.start}～${aw.end}）飞往全国与世界各地的低价往返机票${springNote}。历史数据跨年同期对比：寒假比寒假、暑假比暑假、春节比春节。`,
+    };
+  })(),
 
   // ===== 二、日本枫叶季出游机票监控 =====
   'japan-koyo': {
