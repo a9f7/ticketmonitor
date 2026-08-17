@@ -2,8 +2,20 @@
 // 用法: node scrape.js <moduleId>   （默认 gba-summer）
 const fs = require('fs');
 const path = require('path');
+// 强制 stdout/stderr 立即 flush：Node 在 pipe 模式下 stdout 仍会 block-buffer，
+// 所以把 console.log/info/error 全部重定向到 stderr（stderr 在 pipe 模式下 unbuffered）。
+{
+  const flush = (args) => {
+    const s = args.map(a => typeof a === 'string' ? a : require('util').inspect(a)).join(' ') + '\n';
+    fs.writeSync(process.stderr.fd, s);
+  };
+  console.log = function (...a) { flush(a); };
+  console.info = console.log;
+  console.error = function (...a) { flush(a); };
+}
 const api = require('./api');
 const { MODULES } = require('./modules');
+const koyoLib = require('./koyo');
 
 const ROOT = path.resolve(__dirname, '..');
 const MOD_ID = process.argv[2] || 'gba-summer';
@@ -49,12 +61,55 @@ function tierOf(price) {
 function tripDays(dep, ret) {
   return Math.round((Date.parse(ret + 'T00:00:00Z') - Date.parse(dep + 'T00:00:00Z')) / 86400000);
 }
-function okDuration(dep, ret) {
-  const d = tripDays(dep, ret);
-  return d >= TRIP_MIN_DAYS && d <= TRIP_MAX_DAYS;
+// 按目的地 area 决定偏好行程天数范围；未配置 tripRangesByArea 时回退到 module 整体 tripMin/tripMax
+function tripMinMaxOf(d) {
+  const ranges = MOD.tripRangesByArea;
+  if (ranges && d && d.area) {
+    for (const k of Object.keys(ranges)) {
+      const r = ranges[k];
+      if (r.areas && r.areas.indexOf(d.area) >= 0) return { min: r.min, max: r.max };
+    }
+  }
+  return { min: TRIP_MIN_DAYS, max: TRIP_MAX_DAYS };
+}
+function okDuration(dep, ret, d) {
+  const { min, max } = tripMinMaxOf(d);
+  const days = tripDays(dep, ret);
+  return days >= min && days <= max;
 }
 function addDays(dateStr, n) {
   return new Date(Date.parse(dateStr + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+}
+
+// ===== 枫叶定向搜索（japan-koyo）=====
+// 先算出各目的地「初红→半红→满红」的日期区间，与监控窗口求交集：
+// 交集为空（全程绿叶或全程落叶）或短于一次完整行程的目的地直接剔除，不再搜索航班。
+const KOYO_ON = !!MOD.koyo;
+const KOYO_YEAR = MOD.koyoYear || Number(WIN_START.slice(0, 4));
+const KOYO_REASON = {
+  green: '监控窗口结束时仍未变色（绿叶期）',
+  fallen: '监控窗口开始时已过红叶期（落叶期）',
+  short: '红叶期与监控窗口交集不足一次完整行程',
+};
+const koyoWin = {};
+const koyoExcluded = [];
+if (KOYO_ON) {
+  for (const d of DESTS) {
+    const sw = koyoLib.searchWindow(d, WIN_START, WIN_END, KOYO_YEAR, MOD.tripMin);
+    if (sw.ok) { koyoWin[d.code] = sw; continue; }
+    koyoExcluded.push({
+      code: d.code, city: d.city, area: d.area || null, lat: d.lat, lng: d.lng,
+      reason: sw.reason, reasonText: KOYO_REASON[sw.reason] || sw.reason,
+      redStart: sw.red.start, redEnd: sw.red.end, peak: sw.red.peak, overlapDays: sw.days,
+    });
+  }
+  console.log('[枫叶定向] ' + KOYO_YEAR + ' 年红叶期 ∩ 监控窗口：保留 ' + Object.keys(koyoWin).length
+    + ' 个目的地，剔除 ' + koyoExcluded.length + ' 个');
+}
+// 该目的地允许搜索的日期区间（非枫叶模块返回整个监控窗口）
+function searchRange(d) {
+  const kw = KOYO_ON ? koyoWin[d.code] : null;
+  return kw ? { start: kw.start, end: kw.end, koyo: true } : { start: WIN_START, end: WIN_END, koyo: false };
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -95,6 +150,10 @@ async function stage1() {
   const jobs = [];
   for (const o of ORIGINS) for (const d of DESTS) {
     if (!routeEnabled(o, d)) continue;
+    // 国内航线白名单（仅 global-year 启用）：只保留指定省份/地区的目的地
+    if (MOD.domesticKeep && d.region === 'domestic' && MOD.domesticKeep.indexOf(d.code) < 0) continue;
+    // 枫叶模块：绿叶/落叶目的地不进入搜索
+    if (KOYO_ON && !koyoWin[d.code]) continue;
     jobs.push({ o, d });
   }
   const domesticCount = DESTS.filter(d => d.region === 'domestic').length;
@@ -110,12 +169,21 @@ async function stage1() {
   const res = await pool(jobs, 14, async (j) => {
     const o = j.o, d = j.d;
     const codes = [d.code, d.alt].filter(Boolean);
+    // 枫叶模块把探针与合法日期都收窄到该目的地的红叶期内
+    const sr = searchRange(d);
+    const wins = sr.koyo
+      ? [0, 0.5, 1].map(f => {
+          const s = Date.parse(sr.start + 'T00:00:00Z'), e = Date.parse(sr.end + 'T00:00:00Z');
+          const dep = new Date(s + (e - s) * f).toISOString().slice(0, 10);
+          return { dep, ret: addDays(dep, 30) };
+        })
+      : probeWindows;
     const collected = [];
     for (const c of codes) {
-      for (const w of probeWindows) {
+      for (const w of wins) {
         try {
           const pairs = await retry(() => api.lowPriceCalendar(o.code, c, w.dep, w.ret), 2);
-          const valid = pairs.filter(p => p.dep >= WIN_START && p.dep <= WIN_END && p.ret >= p.dep && p.ret <= WIN_END && okDuration(p.dep, p.ret));
+          const valid = pairs.filter(p => p.dep >= sr.start && p.dep <= sr.end && p.ret >= p.dep && p.ret <= sr.end && okDuration(p.dep, p.ret, d));
           if (valid.length) { collected.push(...valid); break; }
         } catch (e) { /* 试下一个窗口/机场码 */ }
       }
@@ -208,20 +276,31 @@ function pickDates(route) {
   }
   return picks;
 }
-function fallbackFor(mod) {
-  const s = Date.parse(mod.window.start + 'T00:00:00Z');
-  const e = Date.parse(mod.window.end + 'T00:00:00Z');
+function fallbackFor(mod, d) {
+  // 枫叶模块的回退日期同样只在该目的地红叶期内取，避免落回绿叶/落叶期
+  const sr = searchRange(d);
+  const s = Date.parse(sr.start + 'T00:00:00Z');
+  const e = Date.parse(sr.end + 'T00:00:00Z');
+  // 按目的地 area 决定 fallback 行程天数（区域偏好的中位数）
+  const ranges = mod.tripRangesByArea;
+  let minDays = mod.tripMin, maxDays = mod.tripMax;
+  if (ranges && d && d.area) {
+    for (const k of Object.keys(ranges)) {
+      const r = ranges[k];
+      if (r.areas && r.areas.indexOf(d.area) >= 0) { minDays = r.min; maxDays = r.max; break; }
+    }
+  }
+  const mid = Math.round((minDays + maxDays) / 2);
   return [0.15, 0.5, 0.8].map(f => {
     const dep = new Date(s + (e - s) * f).toISOString().slice(0, 10);
-    const ret = addDays(dep, 6);
+    const ret = addDays(dep, mid);
     return { dep, ret };
   });
 }
 async function stage2(withCal, noCal) {
-  const FALLBACK = fallbackFor(MOD);
   const jobs = [];
   for (const r of withCal) for (const p of pickDates(r)) jobs.push({ r, p });
-  for (const r of noCal) for (const p of FALLBACK) jobs.push({ r, p });
+  for (const r of noCal) for (const p of fallbackFor(MOD, r.d)) jobs.push({ r, p });
   console.log('[2/3] 查询 ' + jobs.length + ' 组具体航班（并发 12）...');
   let done = 0;
   const res = await pool(jobs, 12, async (j) => {
@@ -336,13 +415,25 @@ async function stage25(all, byKey) {
   const { withCal, noCal } = await stage1();
   let flights = await stage2(withCal, noCal);
   flights = await stage25([...withCal, ...noCal], flights);
-  const rows = build([...withCal, ...noCal], flights);
+  let rows = build([...withCal, ...noCal], flights);
   rows.sort((a, b) => a.minPrice - b.minPrice);
+
+  // 枫叶最终兜底：逐条校验行程枫叶阶段，非「初红/半红/满红」一律丢弃
+  let koyoFilter = null;
+  if (KOYO_ON) {
+    const fr = koyoLib.applyRedFilter({ rows, dests: DESTS, windows: koyoWin,
+      excluded: koyoExcluded, year: KOYO_YEAR, log: (m) => console.log(m) });
+    rows = fr.rows;
+    koyoFilter = fr.koyoFilter;
+  }
+
   console.log('[3/3] 生成数据文件 ...');
   const payload = {
     moduleId: MOD_ID,
     moduleName: MOD.name,
     generatedAt: new Date().toISOString(),
+    season: MOD.seasonInfo ? MOD.seasonInfo.season : null,
+    seasonLabel: MOD.seasonInfo ? MOD.seasonInfo.label : null,
     origins: ORIGINS,
     origin: ORIGINS[0],
     window: { start: WIN_START, end: WIN_END },
@@ -355,6 +446,7 @@ async function stage25(all, byKey) {
       transitMinKm: TRANSIT_MIN_KM,
       note: '中国香港出发仅国际航线；国际航线可中转，国内航线须直飞（直线距离 ≥ ' + TRANSIT_MIN_KM + 'km 除外）',
     },
+    koyoFilter,
     routes: rows,
   };
   const dir = path.join(ROOT, 'data', MOD_ID);
