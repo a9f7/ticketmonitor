@@ -16,6 +16,7 @@ const path = require('path');
 }
 const { MODULES, GBA_ORIGINS, EXTRA_DEPARTURES } = require('./modules');
 const PH = require('./price_history');
+const { seasonOf, seasonOffset } = require('./seasons');
 const TRIP_CITY = require('./city_trip_id');
 
 function isDomesticRoute(r){
@@ -255,12 +256,29 @@ const payload = {
   origins: data.origins, origin: data.origin, window: data.window,
   gbaCodes: GBA_ORIGINS.map(e=>e.code), extraCodes: EXTRA_DEPARTURES.map(e=>e.code),
   tripDuration: data.tripDuration, excludedAirlines: data.excludedAirlines, priceCap: data.priceCap,
-  routes: data.routes.map(r => ({ ...r, isDomestic: isDomesticRoute(r) })),
+  routes: data.routes.map(r => {
+    const pairs = (r.cheapestPairs || []).map(p => ({ ...p, seasonKey: PH.seasonalKeyOf(r.originCode, r.code, p.dep).key }));
+    return { ...r, isDomestic: isDomesticRoute(r), cheapestPairs: pairs };
+  }),
   hotelDomain: MOD.hotelDomain || 'ctrip',
   picks: Object.fromEntries(TIER_KEYS.map(t => [t, P[t] ? { cheapest: P[t].cheapest.key, discount: P[t].discount.key, most: P[t].most.key } : null])),
   weather: weatherPayload,
   cityTripId: CITY_TRIP_ID,   // 携程 d-city 编号映射，注入页面供 tripMapUrl 使用
-  priceHist: (() => { const o = {}; for (const k in HIST) { const r = HIST[k]; o[k] = { median: r.median, count: r.count }; } return o; })(),  // 历史价格中位数+样本数，供浏览器端标注"历史低价"
+  priceHist: (() => {
+    // 同期聚合：按 出发地>目的地 | 季节 | 季节内偏移 合并跨年样本，只做同期对比
+    const o = {};
+    for (const r of (data.routes || [])) {
+      for (const p of (r.cheapestPairs || [])) {
+        const sk = PH.seasonalKeyOf(r.originCode, r.code, p.dep).key;
+        if (o[sk]) continue;
+        const y = Number(p.dep.slice(0, 4));
+        const s = seasonOf(p.dep, y), off = seasonOffset(p.dep, s, y);
+        const st = PH.seasonalStat(HIST, r.originCode, r.code, s, off);
+        if (st) o[sk] = { median: st.median, count: st.count, season: s, offset: off };
+      }
+    }
+    return o;
+  })(),  // 同期历史价格中位数+样本数，供标注"历史低价"（寒假比寒假、暑假比暑假、春节比春节）
   koyo: hasKoyo ? {
     ...wraw.koyo,
     excluded: koyoExcluded.map(c => ({ code: c.code, city: c.city, lat: c.lat, lng: c.lng,
@@ -586,6 +604,8 @@ input[type=text]{flex:1}
       <h1>${MOD.title}<small>${MOD.sub}</small></h1>
       <div class="meta" style="margin-top:6px">
         <span class="pill">模块 <b>${MOD.name}</b></span>
+        ${(MOD.seasonInfo ? `<span class="pill" style="background:#eaf1ff;border-color:#b9cdf5">当前监测 <b>${MOD.seasonInfo.label}</b></span>` : '')}
+        ${(MOD.seasonInfo && MOD.seasonInfo.springStart ? `<span class="pill" style="background:#fdecee;border-color:#f6cdd2">春节专项 <b>${MOD.seasonInfo.springStart} ~ ${MOD.seasonInfo.springEnd}</b></span>` : '')}
         <span class="pill">出发地 <b>${data.origins.map(o => o.city).join(' / ')}</b></span>
         <span class="pill">出行窗口 <b>${data.window.start} ~ ${data.window.end}</b></span>
         <span class="pill">行程时长 <b>${data.tripDuration.min} ~ ${data.tripDuration.max} 天</b></span>
@@ -595,7 +615,7 @@ input[type=text]{flex:1}
       </div>
     </div>
     <nav class="modnav">
-      <a href="../gba-summer/index.html" class="modnav-i${MOD_ID==='gba-summer'?' on':''}">大湾区暑期</a>
+      <a href="../gba-summer/index.html" class="modnav-i${MOD_ID==='gba-summer'?' on':''}">大湾区寒暑期</a>
       <a href="../japan-koyo/index.html" class="modnav-i${MOD_ID==='japan-koyo'?' on':''}">日本枫叶季</a>
       <a href="../global-year/index.html" class="modnav-i${MOD_ID==='global-year'?' on':''}">全球低价(1年)</a>
     </nav>
@@ -809,11 +829,11 @@ const DATA = ${JSON.stringify(payload)};
 const CITY_TRIP_ID = DATA.cityTripId || {};   // 携程 d-city 编号映射（注入页面，避免引用 Node 端变量）
 // 历史低价判定（浏览器端）：当前价 ≤ 历史中位 × 阈值 且样本达标 → 显著低于历史
 const HIST_THRESHOLD = 0.80, HIST_MIN_SAMPLES = 3;
-function histLow(oc, dc, dep, ret, price) {
-  const s = DATA.priceHist[oc + '>' + dc + '@' + dep + '->' + ret];
+function histLow(seasonKey, price) {
+  const s = DATA.priceHist[seasonKey];
   return !!(s && s.count >= HIST_MIN_SAMPLES && price <= Math.round(s.median * HIST_THRESHOLD));
 }
-function histStat(oc, dc, dep, ret) { return DATA.priceHist[oc + '>' + dc + '@' + dep + '->' + ret] || null; }
+function histStat(seasonKey) { return DATA.priceHist[seasonKey] || null; }
 const REGION_NAME={domestic:'国内/港澳台',asia:'亚洲',oceania:'大洋洲',europe:'欧洲',america:'美洲',africa:'非洲',japan:'日本'};
 const PICK_LABEL={cheapest:'最便宜',discount:'折扣最大',most:'航次最多'};
 const TIER_KEYS=${JSON.stringify(TIER_KEYS)};
@@ -1208,8 +1228,8 @@ function itemHTML(r){
   const _k = (DATA.moduleId==='japan-koyo' && DATA.koyo && DATA.koyo.cities) ? (DATA.koyo.cities.find(c=>c.code===r.code)||null) : null;
   const _koyo = _k ? '<span class="koyo-tag" style="color:'+_k.color+'">🍁 '+_k.label+' · 观赏窗 '+_k.winStart.slice(5)+'~'+_k.winEnd.slice(5)+'</span>' : '';
   const alts=r.cheapestPairs.slice(0,6).map(p=>{
-    const st=histStat(r.originCode, r.code, p.dep, p.ret);
-    const low = histLow(r.originCode, r.code, p.dep, p.ret, p.price);
+    const st=histStat(p.seasonKey);
+    const low = histLow(p.seasonKey, p.price);
     const priceCell = low
       ? '<span class="hist-low">¥'+p.price+'<span class="hist-tag">📉历史低价</span><span class="hist-med">历史中位¥'+st.median+'</span></span>'
       : '¥'+p.price;
@@ -1236,7 +1256,7 @@ function itemHTML(r){
         (r.isDomestic&&r.transitAllowed?'<span class="badge b">远程国内 '+r.distanceKm+'km · 允许中转</span>':'')+
         wBadge+
       '</div>'+
-    (function(){ const _low=(r.cheapestPairs||[]).some(p=>histLow(r.originCode,r.code,p.dep,p.ret,p.price)); return '</div><div class="it-price'+(_low?' hist-on':'')+'">'+( _low?'<span class="hist-low">¥'+r.minPrice+'</span><small>'+TIER_LABEL[r.tier]+'/人往返</small><span class="hist-tag">📉历史低价</span>':'¥'+r.minPrice+'<small>'+TIER_LABEL[r.tier]+'/人往返</small>')+'</div></div>'; })()+
+    (function(){ const _low=(r.cheapestPairs||[]).some(p=>histLow(p.seasonKey,p.price)); return '</div><div class="it-price'+(_low?' hist-on':'')+'">'+( _low?'<span class="hist-low">¥'+r.minPrice+'</span><small>'+TIER_LABEL[r.tier]+'/人往返</small><span class="hist-tag">📉历史低价</span>':'¥'+r.minPrice+'<small>'+TIER_LABEL[r.tier]+'/人往返</small>')+'</div></div>'; })()+
     '<div class="legs">'+fmtLeg(o)+
       (others?'<div class="alts"><div style="color:#8b93a1;margin:5px 0 2px">同航线其他航班</div><table>'+others+'</table></div>':'')+
       (alts?'<div class="alts"><div style="color:#8b93a1;margin:5px 0 2px">窗口期内更多低价日期组合（含全部航司）</div><table>'+alts+'</table></div>':'')+
