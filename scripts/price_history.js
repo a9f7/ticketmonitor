@@ -95,8 +95,52 @@ function seasonalKeyOf(originCode, destCode, dep) {
   const offset = seasonOffset(dep, season, year);
   return { season, offset, key: originCode + '>' + destCode + '|' + season + '|' + offset };
 }
+
+// ===== 模块级同期聚合键（寒暑期 / 日本红叶 / 全球滚动年 统一口径） =====
+// 核心：跨年"同一窗口内同一日历位置"才能互相比较。
+//   gba-summer : 季节(summer/winter/spring) + 季节内偏移（沿用寒暑期逻辑）
+//   japan-koyo : 红叶季(koyo) + 距当年 9/15 偏移（跨年同年度红叶季同位置对比）
+//   global-year: 全球滚动年(gy) + 距所属滚动窗口 7/31 偏移（跨年同期位置对比）
+// 旧记录无预存标签时，从 key 内嵌日期反推，完全兼容（无需迁移历史数据）。
+function winKeyParts(moduleId, dep) {
+  if (moduleId === 'japan-koyo') {
+    const y = Number(dep.slice(0, 4));
+    const base = new Date(Date.UTC(y, 8, 15)); // 9/15 全境最早初红
+    const off = Math.round((Date.parse(dep + 'T00:00:00Z') - base.getTime()) / 86400000);
+    return { group: 'koyo', offset: off };
+  }
+  if (moduleId === 'global-year') {
+    const d = new Date(dep + 'T00:00:00Z');
+    const y = d.getUTCFullYear();
+    const winStartYear = d.getUTCMonth() >= 7 ? y : y - 1; // 滚动窗口 7/31 起算
+    const base = new Date(Date.UTC(winStartYear, 6, 31));
+    const off = Math.round((d.getTime() - base.getTime()) / 86400000);
+    return { group: 'gy', offset: off };
+  }
+  const y = Number(dep.slice(0, 4));
+  const season = seasonOf(dep, y), off = seasonOffset(dep, season, y);
+  return { group: season, offset: off };
+}
+function winKeyOf(moduleId, originCode, destCode, dep) {
+  const p = winKeyParts(moduleId, dep);
+  return originCode + '>' + destCode + '|' + p.group + '|' + p.offset;
+}
+// 按模块同期聚合键聚合历史（兼容旧记录：从 key 内日期反推 group/offset）
+function aggregateByWinKey(hist, moduleId, originCode, destCode, dep) {
+  const target = winKeyOf(moduleId, originCode, destCode, dep);
+  let prices = [];
+  for (const k in hist) {
+    if (k.indexOf(originCode + '>' + destCode + '@') !== 0) continue;
+    const r = hist[k];
+    const depK = k.split('@')[1].split('->')[0];
+    if (winKeyOf(moduleId, originCode, destCode, depK) !== target) continue;
+    if (Array.isArray(r.prices)) for (const p of r.prices) prices.push(p);
+  }
+  if (!prices.length) return null;
+  return { median: median(prices), min: Math.min(...prices), max: Math.max(...prices), count: prices.length };
+}
 // 判断是否「显著低于历史（同期）」：样本达标且当前价 ≤ 同期历史中位 × 阈值
 function isHistLow(stat, price) {
   return !!(stat && stat.count >= MIN_SAMPLES && price <= Math.round(stat.median * THRESHOLD));
 }
-module.exports = { loadHist, saveHist, updateHist, statOf, seasonalStat, seasonalKeyOf, isHistLow, median, histPath, THRESHOLD, MIN_SAMPLES };
+module.exports = { loadHist, saveHist, updateHist, statOf, seasonalStat, seasonalKeyOf, winKeyOf, winKeyParts, aggregateByWinKey, isHistLow, median, histPath, THRESHOLD, MIN_SAMPLES };
