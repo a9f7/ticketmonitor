@@ -257,7 +257,7 @@ const payload = {
   gbaCodes: GBA_ORIGINS.map(e=>e.code), extraCodes: EXTRA_DEPARTURES.map(e=>e.code),
   tripDuration: data.tripDuration, excludedAirlines: data.excludedAirlines, priceCap: data.priceCap,
   routes: data.routes.map(r => {
-    const pairs = (r.cheapestPairs || []).map(p => ({ ...p, seasonKey: PH.seasonalKeyOf(r.originCode, r.code, p.dep).key }));
+    const pairs = (r.cheapestPairs || []).map(p => ({ ...p, seasonKey: PH.winKeyOf(MOD_ID, r.originCode, r.code, p.dep) }));
     return { ...r, isDomestic: isDomesticRoute(r), cheapestPairs: pairs };
   }),
   hotelDomain: MOD.hotelDomain || 'ctrip',
@@ -265,20 +265,22 @@ const payload = {
   weather: weatherPayload,
   cityTripId: CITY_TRIP_ID,   // 携程 d-city 编号映射，注入页面供 tripMapUrl 使用
   priceHist: (() => {
-    // 同期聚合：按 出发地>目的地 | 季节 | 季节内偏移 合并跨年样本，只做同期对比
+    // 同期聚合：按 出发地>目的地 | 窗口内偏移 合并跨年样本，只做同期对比
+    //   gba 寒暑期 → 季节内偏移；日本红叶季 → 距 9/15 偏移；全球滚动年 → 距 7/31 偏移
     const o = {};
     for (const r of (data.routes || [])) {
       for (const p of (r.cheapestPairs || [])) {
-        const sk = PH.seasonalKeyOf(r.originCode, r.code, p.dep).key;
+        const sk = PH.winKeyOf(MOD_ID, r.originCode, r.code, p.dep);
         if (o[sk]) continue;
-        const y = Number(p.dep.slice(0, 4));
-        const s = seasonOf(p.dep, y), off = seasonOffset(p.dep, s, y);
-        const st = PH.seasonalStat(HIST, r.originCode, r.code, s, off);
-        if (st) o[sk] = { median: st.median, count: st.count, season: s, offset: off };
+        const st = PH.aggregateByWinKey(HIST, MOD_ID, r.originCode, r.code, p.dep);
+        if (st) {
+          const pp = PH.winKeyParts ? PH.winKeyParts(MOD_ID, p.dep) : { group: '', offset: 0 };
+          o[sk] = { median: st.median, count: st.count, season: pp.group, offset: pp.offset };
+        }
       }
     }
     return o;
-  })(),  // 同期历史价格中位数+样本数，供标注"历史低价"（寒假比寒假、暑假比暑假、春节比春节）
+  })(),  // 同期历史价格中位数+样本数，供标注"历史低价"（寒假比寒假、红叶季比红叶季、全球同期比同期）
   koyo: hasKoyo ? {
     ...wraw.koyo,
     excluded: koyoExcluded.map(c => ({ code: c.code, city: c.city, lat: c.lat, lng: c.lng,
@@ -606,6 +608,7 @@ input[type=text]{flex:1}
         <span class="pill">模块 <b>${MOD.name}</b></span>
         ${(MOD.seasonInfo ? `<span class="pill" style="background:#eaf1ff;border-color:#b9cdf5">当前监测 <b>${MOD.seasonInfo.label}</b></span>` : '')}
         ${(MOD.seasonInfo && MOD.seasonInfo.springStart ? `<span class="pill" style="background:#fdecee;border-color:#f6cdd2">春节专项 <b>${MOD.seasonInfo.springStart} ~ ${MOD.seasonInfo.springEnd}</b></span>` : '')}
+        ${(MOD.koyoInfo ? `<span class="pill" style="background:#fdeede;border-color:#f3c98a">当前红叶季 <b>${MOD.koyoInfo.label}</b></span>` : '')}
         <span class="pill">出发地 <b>${data.origins.map(o => o.city).join(' / ')}</b></span>
         <span class="pill">出行窗口 <b>${data.window.start} ~ ${data.window.end}</b></span>
         <span class="pill">行程时长 <b>${data.tripDuration.min} ~ ${data.tripDuration.max} 天</b></span>
