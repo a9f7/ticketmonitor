@@ -3,6 +3,7 @@
 const DESTS = require('./destinations');
 const DESTS_JP = require('./destinations-japan');
 const { activeWindow } = require('./seasons');
+const { koyoWindowFor } = require('./koyo_seasons');
 
 // 粤港澳大湾区 5 城出发地（所有模块共用现有框架配置）
 const GBA_ORIGINS = [
@@ -38,7 +39,9 @@ const MODULES = {
   // ===== 一、大湾区寒暑期出游机票监控（长期化：暑期/寒假自动切换，数据跨年同期对比） =====
   'gba-summer': (() => {
     // 动态季节窗口：根据当前日期自动选「暑期 7/1–8/31」或「寒假 1/1–3/1（含春节±5天专项）」
-    const aw = activeWindow(new Date());
+    // TEST_TODAY 仅用于本地预览：模拟"今天"以提前查看寒/暑切换与春节专项效果（生产环境不设该变量）
+    const TEST_TODAY = process.env.TEST_TODAY;
+    const aw = activeWindow(TEST_TODAY ? new Date(TEST_TODAY) : new Date());
     const origins = [...GBA_ORIGINS, ...EXTRA_DEPARTURES];
     const win = { start: aw.start, end: aw.end };
     // probe 取窗口内两个锚点（用于详单接口探测）
@@ -78,32 +81,41 @@ const MODULES = {
     };
   })(),
 
-  // ===== 二、日本枫叶季出游机票监控 =====
-  'japan-koyo': {
-    id: 'japan-koyo',
-    name: '日本枫叶季出游机票监控',
-    short: '日本枫叶季',
-    origins: [...GBA_ORIGINS, ...EXTRA_DEPARTURES],
-    destinations: DESTS_JP,
-    window: { start: '2026-10-01', end: '2026-12-15' },
-    tripMin: 5, tripMax: 9,
-    priceCap: Infinity,        // 价格不设区间限制
-    tiers: [
-      { key: 'T1', cap: 2000, label: '<¥2000' },
-      { key: 'T2', cap: 4000, label: '¥2000-4000' },
-      { key: 'T3', cap: 6000, label: '¥4000-6000' },
-      { key: 'T4', cap: 8000, label: '¥6000-8000' },
-      { key: 'T5', cap: Infinity, label: '¥8000+' },
-    ],
-    rules: { intlOnlyOrigins: ['HKG'], transitMinKm: 3000 },
-    weather: { mode: 'window', window: { start: '2026-10-01', end: '2026-12-15' } },
-    koyo: true,
-    hotelDomain: 'ctrip',
-    probe: { kind: 'anchors', anchors: anchors('2026-10-05', '2026-12-05', 4) },
-    title: '大湾区出发 · 日本枫叶季机票监控',
-    sub: '单人往返含税总价 · 经济舱 · 含枫叶颜色预报',
-    desc: '大湾区 5 城出发，10–12 月日本枫叶季往返机票；同步监控日本全境天气与枫叶变色进度、最佳观赏窗口。',
-  },
+  // ===== 二、日本枫叶季出游机票监控（长期化：红叶季过后自动切下一年度） =====
+  'japan-koyo': (() => {
+    // 动态红叶季窗口：根据当前日期自动选「今年度 9/15–12/15」或「下一年度 9/15–12/15」
+    const TEST_TODAY = process.env.TEST_TODAY;
+    const kw = koyoWindowFor(TEST_TODAY ? TEST_TODAY : new Date().toISOString().slice(0, 10));
+    const win = { start: kw.start, end: kw.end };
+    const probeDates = anchors(kw.start, kw.end, 5);
+    return {
+      id: 'japan-koyo',
+      name: '日本枫叶季出游机票监控',
+      short: '日本枫叶季',
+      origins: [...GBA_ORIGINS, ...EXTRA_DEPARTURES],
+      destinations: DESTS_JP,
+      window: win,
+      tripMin: 5, tripMax: 9,
+      priceCap: Infinity,        // 价格不设区间限制
+      tiers: [
+        { key: 'T1', cap: 2000, label: '<¥2000' },
+        { key: 'T2', cap: 4000, label: '¥2000-4000' },
+        { key: 'T3', cap: 6000, label: '¥4000-6000' },
+        { key: 'T4', cap: 8000, label: '¥6000-8000' },
+        { key: 'T5', cap: Infinity, label: '¥8000+' },
+      ],
+      rules: { intlOnlyOrigins: ['HKG'], transitMinKm: 3000 },
+      weather: { mode: 'window', window: win },
+      koyo: true,
+      koyoYear: kw.year,         // 红叶期所属年度（决定 koyo.js 物候表年份）
+      koyoInfo: kw,
+      hotelDomain: 'ctrip',
+      probe: { kind: 'anchors', anchors: probeDates },
+      title: '大湾区出发 · 日本 ' + kw.label + ' 机票监控',
+      sub: '单人往返含税总价 · 经济舱 · 含枫叶颜色预报',
+      desc: '大湾区 5 城出发，' + kw.label + '（' + kw.start + '～' + kw.end + '）飞往日本各地的往返机票；同步监控日本全境天气与枫叶变色进度、最佳观赏窗口。红叶季过去后自动切换到下一年度。',
+    };
+  })(),
 
   // ===== 三、未来一年全球低价出游机票监控 =====
   'global-year': {
