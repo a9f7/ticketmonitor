@@ -23,11 +23,14 @@ const node = process.argv[2] && !MODULES[process.argv[2]] ? process.argv[2] : pr
 const argMods = process.argv.slice(2).filter(a => MODULES[a]);
 const ids = argMods.length ? argMods : Object.keys(MODULES);
 
-function run(script, mod) {
-  console.log('\n=== 运行 ' + script + (mod ? ' [' + mod + ']' : '') + ' ===');
+function run(script, mod, opts) {
+  opts = opts || {};
+  const tag = opts.soft ? ' (soft：失败不致命，交由降级/回滚处理)' : '';
+  console.log('\n=== 运行 ' + script + (mod ? ' [' + mod + ']' : '') + tag + ' ===');
   const r = spawnSync(node, [path.join(ROOT, 'scripts', script), mod].filter(Boolean), { cwd: ROOT, stdio: 'inherit' });
-  if (r.error) { console.error(script + ' 运行异常:', r.error.message); process.exit(1); }
-  if (r.status !== 0) { console.error(script + ' 退出码非 0:', r.status); process.exit(r.status || 1); }
+  if (r.error) { console.error(script + ' 运行异常:', r.error.message); if (opts.soft) return false; process.exit(1); }
+  if (r.status !== 0) { console.error(script + ' 退出码非 0:', r.status); if (opts.soft) return false; process.exit(r.status || 1); }
+  return true;
 }
 
 function copyModule(mod) {
@@ -62,11 +65,11 @@ for (const id of ids) {
 
   if (SKIP_DETAIL) {
     console.log('[SKIP_DETAIL] 跳过 scrape.js [' + id + ']，直接走日历实时低价模式');
-    run('scrape_calendar.js', id);
+    run('scrape_calendar.js', id, { soft: true });
   } else if (RESUME && fs.existsSync(flPath)) {
     console.log('[RESUME] 跳过 scrape.js [' + id + ']：' + flPath + ' 已存在');
   } else {
-    run('scrape.js', id);
+    run('scrape.js', id, { soft: true });
     // FlightListSearch 被 Trip.com whaleguard 反爬拦截时会返回 0 条或极少条（劣质数据会静默覆盖好数据）
     // → 判定条件：为空，或不足上一轮命中数的一半，均触发日历实时低价降级
     const nowCount = routeCount(id);
@@ -74,7 +77,7 @@ for (const id of ids) {
     if (nowCount <= 0 || tooFew) {
       console.log('[降级] ' + id + ' 详单抓取命中 ' + nowCount + ' 条（上轮 ' + prevCount +
         ' 条），疑似 Trip.com whaleguard 拦截，改用日历实时低价模式');
-      run('scrape_calendar.js', id);
+      run('scrape_calendar.js', id, { soft: true });
     }
   }
 
@@ -89,10 +92,10 @@ for (const id of ids) {
     if (RESUME && fs.existsSync(wxPath)) {
       console.log('[RESUME] 跳过 weather.js [' + id + ']：' + wxPath + ' 已存在');
     } else {
-      run('weather.js', id);
+      run('weather.js', id, { soft: true });
     }
   }
-  run('build.js', id);
+  run('build.js', id, { soft: true });
   copyModule(id);
   // 读取生成时间用于 hub
   let gen = '';
