@@ -3,6 +3,17 @@
 // 用法: node weather.js <moduleId>
 const fs = require('fs');
 const path = require('path');
+// 强制 stdout/stderr 立即 flush：Node 在 pipe 模式下 stdout 仍会 block-buffer，
+// 所以把 console.log/info/error 全部重定向到 stderr（stderr 在 pipe 模式下 unbuffered）。
+{
+  const flush = (args) => {
+    const s = args.map(a => typeof a === 'string' ? a : require('util').inspect(a)).join(' ') + '\n';
+    fs.writeSync(process.stderr.fd, s);
+  };
+  console.log = function (...a) { flush(a); };
+  console.info = console.log;
+  console.error = function (...a) { flush(a); };
+}
 const { MODULES } = require('./modules');
 const koyo = require('./koyo');
 
@@ -254,27 +265,39 @@ function grade(s) {
 
   // ===== 枫叶颜色（日本模块） =====
   if (MOD.koyo) {
-    const year = 2026;
+    const year = (flights.koyoFilter && flights.koyoFilter.year) || 2026;
     const koyoCities = [];
+    const notRed = [];
     for (const c of cities) {
       const bestRoute = [...destMap[c.code].routes].sort((a, b) => a.minPrice - b.minPrice)[0];
       const o = bestRoute.options[0];
       const kw = koyo.koyoDuringWindow(c, o.depDate, o.retDate, year);
       const full = koyo.koyoFor(c, o.depDate, year); // 出行起始日阶段
+      // 兜底：抓取阶段已按红叶期定向搜索，这里只做校验——非初红/半红/满红不应出现
+      if (!koyo.isRed(kw.winStage)) {
+        notRed.push(c.city + '(' + c.code + ')=' + kw.winLabel + ' ' + o.depDate + '~' + o.retDate);
+        continue;
+      }
+      const red = koyo.redWindow(c, year);
       koyoCities.push({
         code: c.code, city: c.city, area: c.area, lat: c.lat, lng: c.lng,
         winStart: o.depDate, winEnd: o.retDate,
-        stage: kw.winStage, label: kw.winLabel, color: full.color,
-        progress: full.progress, desc: full.desc,
+        // color 跟随实际展示的 stage，避免与 winStage 不一致
+        stage: kw.winStage, label: kw.winLabel, color: koyo.STAGES[kw.winStage].color,
+        progress: full.progress, desc: koyo.STAGES[kw.winStage].desc,
         peak: full.peak, bestStart: full.bestStart, bestEnd: full.bestEnd,
         inBest: kw.hit && full.inBest, hit: kw.hit,
         start: full.start, end: full.end,
+        redStart: red.start, redEnd: red.end,
       });
     }
     koyoCities.sort((a, b) => (a.inBest === b.inBest ? (b.progress - a.progress) : (b.inBest ? 1 : -1)));
     payload.koyo = { year, cities: koyoCities,
+      redStages: koyo.RED_STAGES,
+      filter: flights.koyoFilter || null,
       legend: Object.entries(koyo.STAGES).map(([k, v]) => ({ stage: k, label: v.label, color: v.color, desc: v.desc })) };
-    console.log('[枫叶] 已计算 ' + koyoCities.length + ' 城枫叶阶段（' + year + ' 年）');
+    console.log('[枫叶] 已计算 ' + koyoCities.length + ' 城枫叶阶段（' + year + ' 年，仅初红/半红/满红）');
+    if (notRed.length) console.log('[枫叶][告警] ' + notRed.length + ' 城行程不在红叶期，已剔除：' + notRed.join('、'));
   }
 
   fs.mkdirSync(dir, { recursive: true });
