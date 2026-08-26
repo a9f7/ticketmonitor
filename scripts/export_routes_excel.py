@@ -146,12 +146,55 @@ if os.path.exists(jp):
             '是' if n >= 3 else '否',
         ])
 
+# ---- Sheet 5: 每日抓取量（直接对比各抓取日航线数，重点 8/17·8/18·8/19）----
+ws5 = wb.create_sheet('每日抓取量')
+focus_days = {'2026-08-17', '2026-08-18', '2026-08-19'}
+day_stat = collections.defaultdict(lambda: collections.defaultdict(lambda: {'keys': set(), 'pairs': set(), 'samples': 0}))
+for mod in MODULES:
+    ph_path = os.path.join(ROOT, 'data', mod, 'price_history.json')
+    if not os.path.exists(ph_path):
+        continue
+    ph = load_json(ph_path)
+    for k, v in ph.items():
+        oc_dc = k.split('@')[0]
+        for t in v.get('at', []):
+            day = t[:10]
+            s = day_stat[mod][day]
+            s['keys'].add(k); s['pairs'].add(oc_dc); s['samples'] += 1
+# 顶部：三重点日期对比小表
+ws5.append(['重点日期对比（8/17 → 8/18 → 8/19）'])
+ws5.cell(row=1, column=1).font = Font(bold=True, color='C00000')
+ws5.append(['模块', '8/17 组合数', '8/18 组合数', '8/19 组合数', '8/17 对数', '8/18 对数', '8/19 对数', '结论'])
+for mod in MODULES:
+    ds = day_stat[mod]
+    k17 = len(ds.get('2026-08-17', {}).get('keys', set()))
+    k18 = len(ds.get('2026-08-18', {}).get('keys', set()))
+    k19 = len(ds.get('2026-08-19', {}).get('keys', set()))
+    p17 = len(ds.get('2026-08-17', {}).get('pairs', set()))
+    p18 = len(ds.get('2026-08-18', {}).get('pairs', set()))
+    p19 = len(ds.get('2026-08-19', {}).get('pairs', set()))
+    concl = '8/19 无数据，需排查抓取' if k19 == 0 else '正常'
+    ws5.append([MOD_CN.get(mod, mod), k17, k18, k19, p17, p18, p19, concl])
+ws5.append([])  # 空行分隔
+# 下方：全量每日明细
+ws5.append(['全部抓取日明细'])
+ws5.cell(row=ws5.max_row, column=1).font = Font(bold=True)
+headers5 = ['模块', '抓取日', '航线组合(含日期)数', '出发>到达对数', '当日样本数', '备注']
+ws5.append(headers5)
+for mod in MODULES:
+    for day in sorted(day_stat[mod].keys()):
+        s = day_stat[mod][day]
+        note = '★ 重点对比日' if day in focus_days else ''
+        if day in focus_days and len(s['keys']) == 0:
+            note = '⚠ 该日无抓取数据'
+        ws5.append([MOD_CN.get(mod, mod), day, len(s['keys']), len(s['pairs']), s['samples'], note])
+
 # ---- 样式 ----
 hdr_fill = PatternFill('solid', fgColor='2F5496')
 hdr_font = Font(bold=True, color='FFFFFF')
 thin = Side(style='thin', color='D9D9D9')
 border = Border(left=thin, right=thin, top=thin, bottom=thin)
-for ws, headers in ((ws1, headers1), (ws2, headers2), (ws3, headers3), (ws4, headers4)):
+for ws, headers in ((ws1, headers1), (ws2, headers2), (ws3, headers3), (ws4, headers4), (ws5, headers5)):
     for c in range(1, len(headers) + 1):
         cell = ws.cell(row=1, column=c)
         cell.fill = hdr_fill; cell.font = hdr_font
@@ -172,3 +215,4 @@ print(f'  航线明细: {ws1.max_row - 1} 行')
 print(f'  价格历史: {ws2.max_row - 1} 行')
 print(f'  抓取健康度: {ws3.max_row - 1} 行')
 print(f'  日本红叶季专项: {ws4.max_row - 1} 行')
+print(f'  每日抓取量: {ws5.max_row - 1} 行')
