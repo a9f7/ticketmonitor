@@ -2,8 +2,11 @@
 // 统一驱动 scripts/scrape.js / weather.js / build.js。
 const DESTS = require('./destinations');
 const DESTS_JP = require('./destinations-japan');
-const { activeWindow } = require('./seasons');
+const { activeWindow, springFestival } = require('./seasons');
 const { koyoWindowFor } = require('./koyo_seasons');
+// 春节日期推算辅助（与 seasons.js 同口径：UTC）
+function addDaysDate(d, n) { return new Date(d.getTime() + n * 86400000); }
+function ymd(d) { return d.toISOString().slice(0, 10); }
 
 // 粤港澳大湾区 5 城出发地（所有模块共用现有框架配置）
 const GBA_ORIGINS = [
@@ -81,11 +84,53 @@ const MODULES = {
     };
   })(),
 
+  // ===== 一·B、春节专项机票监控（与寒假并列：仅寒假/冬季期间出现，暑假不运行、不显示） =====
+  'gba-spring': (() => {
+    // 与 gba-summer 共用同一"今日"口径（TEST_TODAY 仅用于本地预览/提前上线）：
+    //   winter(冬季) → active=true，运行并展示；summer(暑假) → active=false，pipeline 跳过、导航隐藏。
+    const TEST_TODAY = process.env.TEST_TODAY;
+    const aw = activeWindow(TEST_TODAY ? new Date(TEST_TODAY) : new Date());
+    const winter = aw.season === 'winter';
+    // 春节专项窗口固定为「春节 ±5 天」：与 seasons.js 中 springStart/springEnd 同口径，
+    // 保证落在窗口内的出发日 seasonOf() 返回 'spring'，从而历史同期对比天然「春节比春节」。
+    const cn = springFestival(aw.year);
+    const sStart = cn ? ymd(addDaysDate(cn, -5)) : aw.start;
+    const sEnd = cn ? ymd(addDaysDate(cn, 5)) : aw.end;
+    const win = { start: sStart, end: sEnd };
+    const probeDates = cn ? [sStart, ymd(cn), sEnd] : [aw.start, aw.end];
+    return {
+      id: 'gba-spring',
+      name: '春节专项机票监控',
+      short: '春节专项',
+      active: winter,   // 仅寒假出现；暑假期间不运行（pipeline 过滤）/ 不显示（导航隐藏）
+      origins: [...GBA_ORIGINS, ...EXTRA_DEPARTURES],
+      destinations: DESTS,
+      window: win,
+      tripMin: 5, tripMax: 9,
+      priceCap: 3000,            // >3000 丢弃
+      tiers: [
+        { key: 'T1', cap: 1000, label: '<¥1000' },
+        { key: 'T2', cap: 1500, label: '¥1000-1500' },
+        { key: 'T3', cap: 2000, label: '¥1500-2000' },
+        { key: 'T4', cap: 2500, label: '¥2000-2500' },
+        { key: 'T5', cap: 3000, label: '¥2500-3000' },
+      ],
+      rules: { intlOnlyOrigins: ['HKG'], transitMinKm: 3000 },
+      weather: { mode: 'window', window: win },
+      koyo: false,
+      hotelDomain: 'ctrip',
+      probe: { kind: 'anchors', anchors: probeDates },
+      seasonInfo: { season: 'winter', year: aw.year, label: aw.year + ' 春节', springStart: sStart, springEnd: sEnd, springYear: aw.year },
+      title: '大湾区出发 · 春节专项机票监控',
+      sub: '单人往返含税总价 · 经济舱',
+      desc: `大湾区 5 城出发，春节专项（${sStart}～${sEnd}）飞往全国与世界各地的低价往返机票；历史数据跨年同期对比：春节比春节。`,
+    };
+  })(),
+
   // ===== 二、日本枫叶季出游机票监控（长期化：红叶季过后自动切下一年度） =====
   'japan-koyo': (() => {
-    // 动态红叶季窗口：根据当前日期自动选「今年度 9/15–12/15」或「下一年度 9/15–12/15」
-    const TEST_TODAY = process.env.TEST_TODAY;
-    const kw = koyoWindowFor(TEST_TODAY ? TEST_TODAY : new Date().toISOString().slice(0, 10));
+    // 红叶季窗口只用真实日期（TEST_TODAY 仅用于大湾区寒暑模块预览/提前上线，不影响日本/全球）
+    const kw = koyoWindowFor(new Date().toISOString().slice(0, 10));
     const win = { start: kw.start, end: kw.end };
     const probeDates = anchors(kw.start, kw.end, 5);
     return {
