@@ -3,7 +3,6 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { MODULES } = require('./modules');
 
 // 强制 stdout/stderr 立即 flush：Node 在 pipe 模式下 stdout 仍会 block-buffer，
 // 所以把 console.log/info/error 全部重定向到 stderr（stderr 在 pipe 模式下 unbuffered）。
@@ -18,10 +17,23 @@ const { MODULES } = require('./modules');
 }
 
 const ROOT = path.resolve(__dirname, '..');
+
+// 若 scripts/.test_today 存在且非空，则作为 TEST_TODAY 注入所有子脚本（用于提前上线/预览寒暑模块）。
+// 仅大湾区寒暑模块响应此变量；日本/全球模块已忽略，不受影响。删除该文件即可恢复按真实日期运行。
+const TEST_TODAY_FILE = path.join(ROOT, 'scripts', '.test_today');
+if (fs.existsSync(TEST_TODAY_FILE)) {
+  const v = fs.readFileSync(TEST_TODAY_FILE, 'utf8').trim();
+  if (v) process.env.TEST_TODAY = v;
+}
+// 必须在注入 TEST_TODAY 之后再加载模块：模块内的 activeWindow(TEST_TODAY)（如 gba-spring 的 active 判定）依赖该变量
+const { MODULES } = require('./modules');
+
 const node = process.argv[2] && !MODULES[process.argv[2]] ? process.argv[2] : process.execPath;
 // 解析要运行的模块（参数中属于模块 id 的部分）
 const argMods = process.argv.slice(2).filter(a => MODULES[a]);
-const ids = argMods.length ? argMods : Object.keys(MODULES);
+// 默认运行仅含「当前激活」的模块：gba-spring 等仅特定季节出现的模块在 off-season 被跳过；
+// 仍可用 `node pipeline.js gba-spring` 显式强制运行某一模块。
+const ids = argMods.length ? argMods : Object.keys(MODULES).filter(id => MODULES[id].active !== false);
 
 function run(script, mod, opts) {
   opts = opts || {};
@@ -130,11 +142,15 @@ fs.writeFileSync(path.join(ROOT, 'dist', '.nojekyll'), '');
 console.log('\n✅ 流水线完成，dist/ 已就绪（含 ' + ids.length + ' 个模块 + 根入口跳转），可重新部署。');
 
 // ---------- 安全发布：仅当所有模块均有有效数据时才推送 gh-pages（否则保留线上最后有效版本） ----------
-const allIds = Object.keys(MODULES);
+// 仅对「当前激活」的模块做发布校验；off-season 模块（如暑假期间的 gba-spring）本就不参与发布。
+const allIds = Object.keys(MODULES).filter(id => MODULES[id].active !== false);
 const allValid = allIds.every(id => {
   const ok = routeCount(id) > 0 && fs.existsSync(path.join(ROOT, 'dist', id, 'index.html'));
-  if (!ok) console.error('  ⚠ 模块 ' + id + ' 无有效数据（' + routeCount(id) + ' 条 / dist 缺失），将跳过发布');
-  return ok;
+  if (ok) return true;
+  console.error('  ⚠ 模块 ' + id + ' 无有效数据（' + routeCount(id) + ' 条 / dist 缺失），将跳过发布');
+  // 春节专项即使激活但本轮抓取为空，也不阻塞其余模块发布（导航本就会隐藏无数据的它）
+  if (id === 'gba-spring') { allIds.splice(allIds.indexOf(id), 1); return true; }
+  return false;
 });
 if (!allValid) {
   console.error('⚠ 存在模块抓取为空，跳过 gh-pages 推送以保留线上最后有效版本。');
