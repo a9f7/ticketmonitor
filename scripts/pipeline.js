@@ -39,7 +39,7 @@ function run(script, mod, opts) {
   opts = opts || {};
   const tag = opts.soft ? ' (soft：失败不致命，交由降级/回滚处理)' : '';
   console.log('\n=== 运行 ' + script + (mod ? ' [' + mod + ']' : '') + tag + ' ===');
-  const r = spawnSync(node, [path.join(ROOT, 'scripts', script), mod].filter(Boolean), { cwd: ROOT, stdio: 'inherit' });
+  const r = spawnSync(node, [path.join(ROOT, 'scripts', script), mod].filter(Boolean), { cwd: ROOT, stdio: 'inherit', env: process.env });
   if (r.error) { console.error(script + ' 运行异常:', r.error.message); if (opts.soft) return false; process.exit(1); }
   if (r.status !== 0) { console.error(script + ' 退出码非 0:', r.status); if (opts.soft) return false; process.exit(r.status || 1); }
   return true;
@@ -64,9 +64,10 @@ function routeCount(id) {
     return (d.routes || []).length;
   } catch (e) { return -1; }
 }
-const modInfos = [];
+// ---------- 第一阶段：所有模块先完成抓取 + 天气 ----------
+// 这样后续构建阶段可以互相引用（如 gba-summer 构建时读取 gba-spring 数据决定是否显示春节导航）。
 for (const id of ids) {
-  console.log('\n################ 模块：' + MODULES[id].name + ' ################');
+  console.log('\n################ 抓取/天气：' + MODULES[id].name + ' ################');
   const m = MODULES[id];
   const flPath = path.join(ROOT, 'data', id, 'flights.json');
   const wxPath = path.join(ROOT, 'data', id, 'weather.json');
@@ -107,6 +108,12 @@ for (const id of ids) {
       run('weather.js', id, { soft: true });
     }
   }
+}
+
+// ---------- 第二阶段：所有模块统一构建 + 复制到 dist ----------
+const modInfos = [];
+for (const id of ids) {
+  console.log('\n################ 构建：' + MODULES[id].name + ' ################');
   run('build.js', id, { soft: true });
   copyModule(id);
   // 读取生成时间用于 hub
