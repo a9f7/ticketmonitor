@@ -16,7 +16,7 @@ const path = require('path');
 }
 const { MODULES, GBA_ORIGINS, EXTRA_DEPARTURES } = require('./modules');
 const PH = require('./price_history');
-const { seasonOf, seasonOffset } = require('./seasons');
+const { seasonOf, seasonOffset, activeWindow } = require('./seasons');
 const TRIP_CITY = require('./city_trip_id');
 
 function isDomesticRoute(r){
@@ -48,6 +48,17 @@ try { BUILD_TS_ISO = JSON.parse(fs.readFileSync(VERSION_FILE, 'utf8')).ts; } cat
 const MOD_ID = process.argv[2] || 'gba-summer';
 const MOD = MODULES[MOD_ID];
 if (!MOD) { console.error('未知模块: ' + MOD_ID); process.exit(1); }
+
+// 春节专项导航是否展示：仅当当前处于寒假（冬季）且 gba-spring 已有有效数据时才出现；
+// 暑假期间（或非冬季）一律隐藏，满足「和寒假并列、暑假不出现」的需求。
+const SPRING_NAV = (() => {
+  const t = process.env.TEST_TODAY ? new Date(process.env.TEST_TODAY) : new Date();
+  if (activeWindow(t).season !== 'winter') return false;
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'gba-spring', 'flights.json'), 'utf8'));
+    return (d.routes || []).length > 0;
+  } catch (e) { return false; }
+})();
 
 // 历史价格存档：每次构建时把本次抓取的最低价组合累积进 data/<id>/price_history.json
 // （按 flights.generatedAt 去重，重复构建同一份文件不会重复累积）。随后载入供渲染比对。
@@ -619,6 +630,7 @@ input[type=text]{flex:1}
     </div>
     <nav class="modnav">
       <a href="../gba-summer/index.html" class="modnav-i${MOD_ID==='gba-summer'?' on':''}">大湾区寒暑期</a>
+      ${SPRING_NAV ? `<a href="../gba-spring/index.html" class="modnav-i${MOD_ID==='gba-spring'?' on':''}">🧧 春节专项</a>` : ''}
       <a href="../japan-koyo/index.html" class="modnav-i${MOD_ID==='japan-koyo'?' on':''}">日本枫叶季</a>
       <a href="../global-year/index.html" class="modnav-i${MOD_ID==='global-year'?' on':''}">全球低价(1年)</a>
     </nav>
