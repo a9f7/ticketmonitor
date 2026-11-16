@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>大湾区出发 · 未来一年全球低价机票监控（2026-07-31 ~ 2027-07-31）</title>
-<meta name="build-version" content="20261116-0015">
-<meta name="build-time" content="2026-11-15T16:15:15.571Z">
+<meta name="build-version" content="20261116-1149">
+<meta name="build-time" content="2026-11-16T03:49:32.354Z">
 <style>/* required styles */
 
 .leaflet-pane,
@@ -1525,16 +1525,26 @@ function transitBadge(o,cls){
 }
 // ---------- 机票预订跳转链接（携程 / 天巡）----------
 // 直接深链到「出发地 → 目的地 / 指定往返日期」的航线搜索页，点击即在新标签打开对应查票结果。
-// 经验复用酒店板块：默认走国内站点，比原 trip.com / skyscanner.com 国际站在国内更稳。
+//
+// ⚠️ 2026-11-16 修复「点进去携程价格远高于面板价」：
+//   面板价格来自 trip.com 国际站 GetLowPriceInCalender（往返 RT、CNY 日历起价），
+//   而旧链接指向携程国内站 flights.ctrip.com 的 round-XXX-YYY/?depdate=A_B 格式——
+//   该格式已失效（实测 HTTP 432 反爬拦截），且站点错配（国内站价 ≠ 国际站日历价）。
+//   现改为与数据源同源的 trip.com 国际站 showfarefirst 深链，带齐往返日期与 triptype=RT：
+//     https://www.trip.com/flights/showfarefirst?dcity={ORIG}&acity={DEST}&ddate={YYYY-MM-DD}&rdate={YYYY-MM-DD}&triptype=RT&quantity=1
+//   城市码用 IATA 大写（与 lowPriceCalendar 的 dCity/aCity 参数一致）。
+//   注意：面板价是「低价日历起价」，实际含税/含行李价以查票页为准，按钮 title 已标注。
 function tripFlightUrl(r){
-  const o=r.options && r.options[0]; if(!o) return 'https://flights.ctrip.com/';
-  // 携程国内机票往返的正确格式：depdate=去程日期_回程日期（下划线连接）
-  const u=new URL('https://flights.ctrip.com/online/list/round-'+r.originCode+'-'+r.code+'/');
-  u.searchParams.set('depdate', o.depDate+'_'+o.retDate);
-  u.searchParams.set('cabin', 'y_s_c_f');
-  u.searchParams.set('adult', '1');
-  u.searchParams.set('child', '0');
-  u.searchParams.set('infant', '0');
+  const o=r.options && r.options[0]; if(!o) return 'https://www.trip.com/flights/';
+  const u=new URL('https://www.trip.com/flights/showfarefirst');
+  u.searchParams.set('dcity', r.originCode);
+  u.searchParams.set('acity', r.code);
+  u.searchParams.set('ddate', o.depDate);
+  u.searchParams.set('rdate', o.retDate);
+  u.searchParams.set('triptype', 'RT');
+  u.searchParams.set('quantity', '1');
+  u.searchParams.set('class', 'economy');
+  u.searchParams.set('lowpricesource', 'searchform');
   return u.toString();
 }
 // 天巡（Skyscanner 中国站）机票搜索结果深链：经实测，正确格式为
@@ -1560,9 +1570,10 @@ function skyFlightUrl(r){
 }
 function flightLinks(r){
   if(!r || !r.options || !r.options.length) return '';
+  const o=r.options[0];
   const trip=tripFlightUrl(r), sky=skyFlightUrl(r);
   return '<div class="fly-btns">'+
-    '<a class="fly-trip" href="'+trip+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在携程查看 '+r.originCity+'→'+r.city+' 该行程查票">✈️ 携程查票</a>'+
+    '<a class="fly-trip" href="'+trip+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在 Trip.com 查看 '+r.originCity+'→'+r.city+' '+o.depDate+' 去 / '+o.retDate+' 回（¥'+r.minPrice+' 为日历起价，实际含税价以查票页为准）">✈️ Trip.com 查票</a>'+
     '<a class="fly-sky" href="'+sky+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="在天巡网查看 '+r.originCity+'→'+r.city+' 该行程查票">🌐 天巡查票</a>'+
   '</div>';
 }
@@ -2235,6 +2246,6 @@ if(KOYO && KOYO.cities && KOYO.cities.length){
   setTimeout(()=>kmap.invalidateSize(),300);
 }
 </script>
-<div style="position:fixed;right:8px;bottom:8px;z-index:9999;font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#8b93a1;background:rgba(255,255,255,.82);border:1px solid #e4e7ec;border-radius:6px;padding:2px 7px;backdrop-filter:blur(2px)" title="构建版本 20261116-0015 · 2026-11-15T16:15:15.571Z">构建 v20261116-0015</div>
+<div style="position:fixed;right:8px;bottom:8px;z-index:9999;font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#8b93a1;background:rgba(255,255,255,.82);border:1px solid #e4e7ec;border-radius:6px;padding:2px 7px;backdrop-filter:blur(2px)" title="构建版本 20261116-1149 · 2026-11-16T03:49:32.354Z">构建 v20261116-1149</div>
 </body>
 </html>
