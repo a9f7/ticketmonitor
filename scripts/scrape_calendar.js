@@ -121,6 +121,14 @@ function optOf(p) {
   };
 }
 function makeRoute(o, d, pairs) {
+  // 去重：多个出发锚点各查 30 天跨度，重叠区间的同一「去程|回程|价格」组合会重复出现，
+  // 不去重会导致 cheapestPairs/options 前几条全是同一组合（看似"没更新"），且 datePairsInBudget 虚高。
+  const seen = new Set();
+  pairs = pairs.filter(p => {
+    const k = p.dep + '|' + p.ret + '|' + p.price;
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
   pairs.sort((a, b) => a.price - b.price);
   const best = pairs[0];
   const prices = pairs.map(p => p.price);
